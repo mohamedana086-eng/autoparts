@@ -1,0 +1,7 @@
+.vercel
+
+# Real env files only — .env.example is a committed template, so do not
+# broaden this back to `.env*`, which would swallow it too.
+.env
+.env.local
+.env*.local

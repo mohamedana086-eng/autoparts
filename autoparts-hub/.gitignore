@@ -1,0 +1,27 @@
+# dependencies
+node_modules
+
+# next.js
+.next
+out
+
+# local database
+dev.db
+dev.db-journal
+*.db
+
+# env — never commit real secrets; see .env.example
+.env
+.env.local
+.env*.local
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# vercel
+.vercel
+
+# misc
+*.log
+.DS_Store

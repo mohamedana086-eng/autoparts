@@ -1,0 +1,155 @@
+// Prisma schema for AutoParts Hub
+// Local setup: npx prisma migrate dev   then   npm run db:seed
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ---------- Catalog ----------
+
+model VehicleSystem {
+  id       String    @id @default(cuid())
+  name     String    // e.g. "Brake System", "Cooling System"
+  slug     String    @unique
+  icon     String    // lucide-react icon name
+  order    Int       @default(0)
+  products Product[]
+}
+
+model Manufacturer {
+  id       String    @id @default(cuid())
+  name     String    @unique // e.g. BMW, NISSAN, BOSCH
+  isOEM    Boolean   @default(false)
+  products Product[]
+}
+
+model Supplier {
+  id           String        @id @default(cuid())
+  name         String
+  code         String        @unique // e.g. IB16, NP20
+  reliability  String        @default("standard") // official | reliable | standard
+  markupRules  MarkupRule[]
+}
+
+model Product {
+  id             String        @id @default(cuid())
+  partNumber     String        @unique
+  name           String
+  description    String?
+  manufacturerId String
+  manufacturer   Manufacturer  @relation(fields: [manufacturerId], references: [id])
+  vehicleSystemId String
+  vehicleSystem  VehicleSystem @relation(fields: [vehicleSystemId], references: [id])
+  basePrice      Float         // supplier purchase price, before markup
+  currency       String        @default("EUR")
+  stockDays      Int           @default(1) // delivery lead time in days
+  interchanges   Interchange[] @relation("SourcePart")
+  orderItems     OrderItem[]
+  createdAt      DateTime      @default(now())
+}
+
+// cross-reference: which part numbers are interchangeable with which
+model Interchange {
+  id             String   @id @default(cuid())
+  sourceId       String
+  source         Product  @relation("SourcePart", fields: [sourceId], references: [id])
+  targetPartNo   String
+  targetManufacturer String
+  exactMatch     Boolean  @default(false)
+}
+
+// ---------- Clients & pricing tiers ----------
+
+model ClientCategory {
+  id                 String   @id @default(cuid())
+  name               String   // e.g. "Retail", "Price 1" ... "Price 10"
+  markupPercent      Float    // default markup applied on top of basePrice
+  minOrderAmount     Float    @default(0)
+  requiresApproval   Boolean  @default(false)
+  shelfLifeDays      Int      @default(1) // how long a cart price is held
+  clients            Client[]
+  markupRules        MarkupRule[]
+}
+
+// ---------- Auth ----------
+
+// Roles are stored as strings rather than a Prisma enum. The app narrows
+// them in code (toRole() in lib/auth.ts), which keeps the schema portable
+// across connectors. Allowed values:
+//   ADMIN   full access to /admin
+//   B2B     trade/wholesale account, tied to a negotiated ClientCategory
+//   RETAIL  ordinary retail customer
+
+model Client {
+  id               String          @id @default(cuid())
+  name             String
+  email            String          @unique
+  passwordHash     String?         // null = account created by admin without login access yet
+  role             String          @default("RETAIL")
+  city             String?
+  categoryId       String?
+  category         ClientCategory? @relation(fields: [categoryId], references: [id])
+  orders           Order[]
+  createdAt        DateTime        @default(now())
+}
+
+// ---------- Complex markup engine ----------
+// Mirrors the "Complex markup" rule builder: a rule matches on any
+// combination of filters (all optional / "any"), and the most specific
+// matching rule wins. See lib/pricing.ts for the resolution order.
+
+// Also a string rather than an enum, for the same reason — and because
+// lib/pricing.ts already models it as a string union. Allowed values:
+//   PERCENT  +X %
+//   AMOUNT   +X currency units
+//   FIXED    set price to X
+
+model MarkupRule {
+  id               String          @id @default(cuid())
+  label            String
+  priority         Int             @default(0) // higher wins on ties
+
+  // filters — null/empty = "any"
+  clientCategoryId String?
+  clientCategory   ClientCategory? @relation(fields: [clientCategoryId], references: [id])
+  supplierId       String?
+  supplier         Supplier?       @relation(fields: [supplierId], references: [id])
+  manufacturerName String?
+  vehicleSystemSlug String?
+  partNumberPrefix String?
+  purchasePriceFrom Float?
+  purchasePriceTo   Float?
+
+  type             String          @default("PERCENT")
+  value            Float
+
+  active           Boolean         @default(true)
+  createdAt        DateTime        @default(now())
+}
+
+// ---------- Orders ----------
+
+model Order {
+  id           String      @id @default(cuid())
+  reference    String      @unique
+  clientId     String
+  client       Client      @relation(fields: [clientId], references: [id])
+  status       String      @default("order_is_sent") // order_is_sent | processing | shipped | paid
+  items        OrderItem[]
+  createdAt    DateTime    @default(now())
+}
+
+model OrderItem {
+  id           String   @id @default(cuid())
+  orderId      String
+  order        Order    @relation(fields: [orderId], references: [id])
+  productId    String
+  product      Product  @relation(fields: [productId], references: [id])
+  quantity     Int      @default(1)
+  unitPrice    Float    // resolved price at time of order (after markup)
+}
