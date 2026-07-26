@@ -58,10 +58,16 @@ http://localhost:3000/admin for the admin panel.
    - `DATABASE_URL` — the pooled connection string
    - `AUTH_SECRET` — a fresh `openssl rand -hex 32`. Do **not** reuse the
      dev placeholder; anyone who knows it can forge session cookies.
-4. Deploy. `npm run build` runs `prisma migrate deploy`, so the schema is
-   created on the first build.
-5. Seed once, from your machine, with `DATABASE_URL` pointing at the
-   hosted database: `npm run db:seed`.
+4. Create the schema once, from your machine, with `DATABASE_URL`
+   pointing at the hosted database: `npm run db:deploy` — then
+   `npm run db:seed` for the sample catalog and accounts.
+5. Deploy.
+
+The build deliberately does **not** run migrations. Every route is
+rendered on demand, so nothing touches the database at build time, and
+keeping migrations out means an unreachable database cannot fail a
+deploy (it shows up as `P1001` mid-build). Run `npm run db:deploy`
+yourself whenever a migration needs applying.
 
 Note that SQLite cannot be used on Vercel — serverless instances get an
 ephemeral, read-only filesystem — which is why this uses Postgres.
