@@ -8,12 +8,26 @@ async function getResults(q: string, system?: string) {
   const products = await prisma.product.findMany({
     where: {
       AND: [
-        q ? { OR: [{ partNumber: { contains: q } }, { name: { contains: q } }] } : {},
+        // `mode: 'insensitive'` matters on Postgres, where `contains` is a
+        // case-sensitive LIKE — without it, searching "thermostat" misses
+        // the part actually named "Thermostat".
+        q
+          ? {
+              OR: [
+                { partNumber: { contains: q, mode: 'insensitive' } },
+                { name: { contains: q, mode: 'insensitive' } },
+              ],
+            }
+          : {},
         system ? { vehicleSystem: { slug: system } } : {},
       ],
     },
     include: { manufacturer: true, vehicleSystem: true },
   });
+
+  const systemRecord = system
+    ? await prisma.vehicleSystem.findUnique({ where: { slug: system } })
+    : null;
 
   const session = await getSession();
   const category = session?.categoryId
@@ -25,6 +39,7 @@ async function getResults(q: string, system?: string) {
   return {
     tierName: category?.name ?? 'Retail',
     isLoggedIn: !!session,
+    systemName: systemRecord?.name ?? null,
     products: products.map((p) => ({
       ...p,
       pricing: category
@@ -52,13 +67,15 @@ export default async function SearchPage({
 }) {
   const q = searchParams.q ?? '';
   const system = searchParams.system;
-  const { tierName, isLoggedIn, products: results } = await getResults(q, system);
+  const { tierName, isLoggedIn, systemName, products: results } = await getResults(q, system);
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-10">
       <div className="flex items-baseline justify-between mb-1">
         <h1 className="font-display text-2xl font-bold">
-          {q ? <>Results for <span className="font-mono text-signal">{q}</span></> : 'All parts'}
+          {q
+            ? <>Results for <span className="font-mono text-signal">{q}</span></>
+            : systemName ?? 'All parts'}
         </h1>
         <span className="text-xs text-mute font-mono">{results.length} found</span>
       </div>
@@ -102,7 +119,13 @@ export default async function SearchPage({
 
         {results.length === 0 && (
           <div className="border border-dashed border-ink-line rounded-plate p-10 text-center text-mute text-sm">
-            No parts match &quot;{q}&quot;. Try a different part number or browse by system.
+            {q ? (
+              <>No parts match &quot;{q}&quot;. Try a different part number or browse by system.</>
+            ) : systemName ? (
+              <>Nothing in {systemName} yet. <Link href="/" className="text-signal hover:underline">Browse another system</Link> or search by part number.</>
+            ) : (
+              <>The catalog is empty.</>
+            )}
           </div>
         )}
       </div>
