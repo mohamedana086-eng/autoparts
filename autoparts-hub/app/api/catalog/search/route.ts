@@ -7,10 +7,12 @@ import {
 type Sort = 'relevance' | 'price-asc' | 'price-desc' | 'delivery';
 const SORTS: Sort[] = ['relevance', 'price-asc', 'price-desc', 'delivery'];
 
-/** Why a row came back, so the UI can say so. */
+/** Why a row came back, so the UI can explain non-obvious hits. */
 type MatchedOn = 'part-number' | 'name' | 'manufacturer' | 'interchange' | 'description';
 
-// GET /api/catalog/search?q=&system=&manufacturer=&sort=
+const MAX_RESULTS = 200;
+
+// GET /api/catalog/search?q=&system=&manufacturer=&sort=&limit=
 // Prices come from the caller's own session tier — see loadPricingContext.
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -21,55 +23,81 @@ export async function GET(req: NextRequest) {
   const requestedSort = searchParams.get('sort') as Sort | null;
   const sort: Sort = requestedSort && SORTS.includes(requestedSort) ? requestedSort : 'relevance';
 
-  // Separator-insensitive part numbers, and cross-references, both need a
-  // scan, so resolve them to ids first and fold those into the main query.
+  const requestedLimit = Number(searchParams.get('limit'));
+  const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
+    ? Math.min(requestedLimit, MAX_RESULTS)
+    : MAX_RESULTS;
+
+  // Every word has to land somewhere, but not all in the same field — that is
+  // what lets "bosch brake pad" work, where the brand is on one column and the
+  // rest of the words are on another.
+  const tokens = q.split(/\s+/).filter(Boolean);
+  const tokenClauses = tokens.map((t) => ({
+    OR: [
+      { partNumber: { contains: t, mode: 'insensitive' as const } },
+      { name: { contains: t, mode: 'insensitive' as const } },
+      { description: { contains: t, mode: 'insensitive' as const } },
+      { manufacturer: { name: { contains: t, mode: 'insensitive' as const } } },
+      { interchanges: { some: { targetPartNo: { contains: t, mode: 'insensitive' as const } } } },
+    ],
+  }));
+
+  // Separated part numbers and cross-references need a scan, so resolve them
+  // to ids first. Kept as its own branch so `0 986 424 815` still lands on the
+  // part directly rather than depending on each fragment matching.
   const normalisedIds = q ? await idsMatchingNormalisedPartNumber(q) : [];
 
+  // Filtered by the query only. System and brand are applied below so their
+  // facet counts can be taken before each one narrows the list.
   const [matches, systemRecord, ctx] = await Promise.all([
     prisma.product.findMany({
-      where: {
-        AND: [
-          q
-            ? {
-                OR: [
-                  { partNumber: { contains: q, mode: 'insensitive' } },
-                  { name: { contains: q, mode: 'insensitive' } },
-                  { description: { contains: q, mode: 'insensitive' } },
-                  { manufacturer: { name: { contains: q, mode: 'insensitive' } } },
-                  { interchanges: { some: { targetPartNo: { contains: q, mode: 'insensitive' } } } },
-                  ...(normalisedIds.length ? [{ id: { in: normalisedIds } }] : []),
-                ],
-              }
-            : {},
-          system ? { vehicleSystem: { slug: system } } : {},
-        ],
-      },
+      where: q
+        ? {
+            OR: [
+              ...(normalisedIds.length ? [{ id: { in: normalisedIds } }] : []),
+              ...(tokenClauses.length ? [{ AND: tokenClauses }] : []),
+            ],
+          }
+        : {},
       include: { manufacturer: true, vehicleSystem: true, interchanges: true },
-      // Enough to return a whole system, or the unfiltered catalogue, without
-      // silently cutting results off. Needs real paging well before this.
-      take: 200,
+      take: MAX_RESULTS,
     }),
     system ? prisma.vehicleSystem.findUnique({ where: { slug: system } }) : Promise.resolve(null),
     loadPricingContext(),
   ]);
 
-  // Facets are counted before the brand filter is applied, so the list stays
-  // usable for switching between brands rather than collapsing to the one
-  // already chosen.
-  const brandCounts = new Map<string, number>();
+  const systemCounts = new Map<string, { slug: string; name: string; count: number }>();
   for (const p of matches) {
+    const entry = systemCounts.get(p.vehicleSystem.slug);
+    if (entry) entry.count++;
+    else systemCounts.set(p.vehicleSystem.slug, {
+      slug: p.vehicleSystem.slug,
+      name: p.vehicleSystem.name,
+      count: 1,
+    });
+  }
+
+  const inSystem = system ? matches.filter((p) => p.vehicleSystem.slug === system) : matches;
+
+  const brandCounts = new Map<string, number>();
+  for (const p of inSystem) {
     brandCounts.set(p.manufacturer.name, (brandCounts.get(p.manufacturer.name) ?? 0) + 1);
   }
 
   const needle = normalisePartNumber(q);
   const lower = q.toLowerCase();
+  const lowerTokens = tokens.map((t) => t.toLowerCase());
+  const containsEvery = (haystack: string) => lowerTokens.every((t) => haystack.includes(t));
 
-  const scored = matches
+  const scored = inSystem
     .filter((p) => !manufacturer || p.manufacturer.name.toLowerCase() === manufacturer.toLowerCase())
     .map((p) => {
       const normalisedPart = normalisePartNumber(p.partNumber);
+      const name = p.name.toLowerCase();
+      const brand = p.manufacturer.name.toLowerCase();
+      const description = (p.description ?? '').toLowerCase();
 
-      let rank = 6;
+      let rank = 7;
       let matchedOn: MatchedOn = 'description';
       let matchedVia: string | null = null;
 
@@ -84,12 +112,15 @@ export async function GET(req: NextRequest) {
       } else if (needle && normalisedPart.includes(needle)) {
         rank = 2;
         matchedOn = 'part-number';
-      } else if (p.name.toLowerCase().includes(lower)) {
+      } else if (containsEvery(name)) {
         rank = 3;
         matchedOn = 'name';
-      } else if (p.manufacturer.name.toLowerCase().includes(lower)) {
+      } else if (containsEvery(`${brand} ${name}`)) {
         rank = 4;
-        matchedOn = 'manufacturer';
+        matchedOn = name.includes(lower) ? 'name' : 'manufacturer';
+      } else if (containsEvery(`${brand} ${name} ${description}`)) {
+        rank = 5;
+        matchedOn = 'description';
       } else {
         const cross = p.interchanges.find(
           (i) =>
@@ -97,7 +128,7 @@ export async function GET(req: NextRequest) {
             (!!needle && normalisePartNumber(i.targetPartNo).includes(needle))
         );
         if (cross) {
-          rank = 5;
+          rank = 6;
           matchedOn = 'interchange';
           matchedVia = cross.targetPartNo;
         }
@@ -139,16 +170,20 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     query: q,
     systemName: systemRecord?.name ?? null,
+    system: system ?? null,
     manufacturer: manufacturer ?? null,
     sort,
     tierName: ctx.tierName,
     isLoggedIn: ctx.isLoggedIn,
     count: scored.length,
     facets: {
+      systems: [...systemCounts.values()].sort(
+        (a, b) => b.count - a.count || a.name.localeCompare(b.name)
+      ),
       manufacturers: [...brandCounts.entries()]
         .map(([name, count]) => ({ name, count }))
         .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
     },
-    products: scored.map((s) => s.product),
+    products: scored.slice(0, limit).map((s) => s.product),
   });
 }

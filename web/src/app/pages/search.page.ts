@@ -37,6 +37,26 @@ const SORT_LABELS: Array<{ value: SearchSort; label: string }> = [
         }
       </p>
 
+      @if (data() && (data()!.facets.systems.length > 1 || data()!.system)) {
+        <div class="flex flex-wrap items-center gap-2 mb-3">
+          <span class="text-[11px] uppercase tracking-wider text-mute mr-1">System</span>
+
+          <button type="button" (click)="setSystem(null)"
+                  class="text-xs px-2.5 py-1 rounded-plate border transition-colors"
+                  [class]="!data()!.system ? activeChip : idleChip">
+            All
+          </button>
+
+          @for (s of data()!.facets.systems; track s.slug) {
+            <button type="button" (click)="setSystem(s.slug)"
+                    class="text-xs px-2.5 py-1 rounded-plate border transition-colors"
+                    [class]="data()!.system === s.slug ? activeChip : idleChip">
+              {{ s.name }} <span class="font-mono text-[10px] opacity-70">{{ s.count }}</span>
+            </button>
+          }
+        </div>
+      }
+
       @if (data() && (data()!.facets.manufacturers.length > 1 || data()!.manufacturer)) {
         <div class="flex flex-wrap items-center gap-2 mb-6">
           <span class="text-[11px] uppercase tracking-wider text-mute mr-1">Brand</span>
@@ -186,6 +206,12 @@ export class SearchPage {
 
   protected setBrand(name: string | null): void {
     this.merge({ manufacturer: name });
+  }
+
+  /** Changing system drops the brand filter — the old brand often has nothing
+   *  in the new system, which would otherwise land on an empty page. */
+  protected setSystem(slug: string | null): void {
+    this.merge({ system: slug, manufacturer: null });
   }
 
   protected setSort(sort: string): void {

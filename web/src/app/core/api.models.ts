@@ -32,15 +32,22 @@ export interface BrandFacet {
   count: number;
 }
 
+export interface SystemFacet {
+  slug: string;
+  name: string;
+  count: number;
+}
+
 export interface SearchResponse {
   query: string;
   systemName: string | null;
+  system: string | null;
   manufacturer: string | null;
   sort: SearchSort;
   tierName: string;
   isLoggedIn: boolean;
   count: number;
-  facets: { manufacturers: BrandFacet[] };
+  facets: { systems: SystemFacet[]; manufacturers: BrandFacet[] };
   products: ProductSummary[];
 }
 
