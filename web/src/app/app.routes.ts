@@ -1,4 +1,5 @@
 import { Routes } from '@angular/router';
+import { adminGuard } from './core/admin.guard';
 
 // Pages are lazily loaded so the initial bundle stays small.
 export const routes: Routes = [
@@ -8,5 +9,23 @@ export const routes: Routes = [
   { path: 'cart', loadComponent: () => import('./pages/cart.page').then((m) => m.CartPage) },
   { path: 'login', loadComponent: () => import('./pages/login.page').then((m) => m.LoginPage) },
   { path: 'register', loadComponent: () => import('./pages/register.page').then((m) => m.RegisterPage) },
+  {
+    path: 'admin',
+    canMatch: [adminGuard],
+    loadComponent: () => import('./admin/admin-layout').then((m) => m.AdminLayout),
+    children: [
+      { path: '', loadComponent: () => import('./admin/dashboard.page').then((m) => m.AdminDashboardPage) },
+      { path: 'clients', loadComponent: () => import('./admin/clients.page').then((m) => m.AdminClientsPage) },
+      {
+        path: 'client-categories',
+        loadComponent: () => import('./admin/client-categories.page').then((m) => m.AdminClientCategoriesPage),
+      },
+      {
+        path: 'markup-rules',
+        loadComponent: () => import('./admin/markup-rules.page').then((m) => m.AdminMarkupRulesPage),
+      },
+      { path: 'orders', loadComponent: () => import('./admin/orders.page').then((m) => m.AdminOrdersPage) },
+    ],
+  },
   { path: '**', redirectTo: '' },
 ];

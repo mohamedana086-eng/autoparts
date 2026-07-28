@@ -24,7 +24,7 @@ import { CartService } from '../core/cart.service';
 
           <nav class="flex items-center gap-4 sm:gap-5 text-sm text-mute shrink-0 md:order-3">
             @if (auth.isAdmin()) {
-              <a href="/admin" class="hover:text-paper transition-colors hidden sm:inline">Admin</a>
+              <a routerLink="/admin" class="hover:text-paper transition-colors hidden sm:inline">Admin</a>
             }
 
             @if (auth.isLoggedIn()) {
