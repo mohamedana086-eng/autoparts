@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html, body {
+  background-color: #10131A;
+  color: #EDEFF2;
+  min-height: 100%;
+}
+
+::selection {
+  background-color: #FF6A1A;
+  color: #10131A;
+}
+
+/* stamped "VIN plate" badge used for part numbers throughout the site */
+.plate {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  letter-spacing: 0.04em;
+  border: 1px solid #2A3240;
+  background: linear-gradient(180deg, #1B212B 0%, #151A22 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.plate::before,
+.plate::after {
+  content: '';
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #3A4353;
+}
+
+.hatch {
+  background-image: repeating-linear-gradient(
+    135deg,
+    rgba(255, 106, 26, 0.05) 0px,
+    rgba(255, 106, 26, 0.05) 2px,
+    transparent 2px,
+    transparent 10px
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

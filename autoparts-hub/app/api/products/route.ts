@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { resolvePrice, MarkupRule } from '@/lib/pricing';
+import { searchWhere } from '@/lib/catalog';
 
 // GET /api/products?q=<part number or name>&system=<slug>&clientId=<id>
 export async function GET(req: NextRequest) {
@@ -10,12 +11,7 @@ export async function GET(req: NextRequest) {
   const clientId = searchParams.get('clientId') ?? undefined;
 
   const products = await prisma.product.findMany({
-    where: {
-      AND: [
-        q ? { OR: [{ partNumber: { contains: q } }, { name: { contains: q } }] } : {},
-        system ? { vehicleSystem: { slug: system } } : {},
-      ],
-    },
+    where: searchWhere(q, system),
     include: { manufacturer: true, vehicleSystem: true },
     take: 30,
   });

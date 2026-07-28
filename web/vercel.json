@@ -1,0 +1,15 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "comment": "Proxy the API through this origin so the session cookie stays first-party. Replace the destination host with the deployed Next.js API URL.",
+      "source": "/api/:path*",
+      "destination": "https://REPLACE-WITH-API-DEPLOYMENT.vercel.app/api/:path*"
+    },
+    {
+      "comment": "SPA fallback — the Angular router owns every non-API path.",
+      "source": "/:path*",
+      "destination": "/index.html"
+    }
+  ]
+}
