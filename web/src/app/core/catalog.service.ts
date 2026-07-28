@@ -11,10 +11,17 @@ export class CatalogService {
     return this.http.get<{ systems: VehicleSystem[] }>('/api/systems');
   }
 
-  search(q: string, system?: string | null): Observable<SearchResponse> {
+  search(opts: {
+    q?: string | null;
+    system?: string | null;
+    manufacturer?: string | null;
+    sort?: string | null;
+  }): Observable<SearchResponse> {
     let params = new HttpParams();
-    if (q) params = params.set('q', q);
-    if (system) params = params.set('system', system);
+    if (opts.q) params = params.set('q', opts.q);
+    if (opts.system) params = params.set('system', opts.system);
+    if (opts.manufacturer) params = params.set('manufacturer', opts.manufacturer);
+    if (opts.sort && opts.sort !== 'relevance') params = params.set('sort', opts.sort);
     return this.http.get<SearchResponse>('/api/catalog/search', { params });
   }
 

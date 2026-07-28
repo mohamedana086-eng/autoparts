@@ -7,6 +7,10 @@ export interface VehicleSystem {
   icon: string;
 }
 
+export type MatchedOn = 'part-number' | 'name' | 'manufacturer' | 'interchange' | 'description';
+
+export type SearchSort = 'relevance' | 'price-asc' | 'price-desc' | 'delivery';
+
 export interface ProductSummary {
   id: string;
   partNumber: string;
@@ -17,14 +21,26 @@ export interface ProductSummary {
   stockDays: number;
   price: number;
   appliedRule: string | null;
+  /** Why this row came back, so the UI can explain non-obvious hits. */
+  matchedOn?: MatchedOn;
+  /** The cross-reference that matched, when matchedOn is 'interchange'. */
+  matchedVia?: string | null;
+}
+
+export interface BrandFacet {
+  name: string;
+  count: number;
 }
 
 export interface SearchResponse {
   query: string;
   systemName: string | null;
+  manufacturer: string | null;
+  sort: SearchSort;
   tierName: string;
   isLoggedIn: boolean;
   count: number;
+  facets: { manufacturers: BrandFacet[] };
   products: ProductSummary[];
 }
 
