@@ -1,7 +1,8 @@
 import Link from 'next/link';
-import { Search, ShoppingCart, User, Wrench, LogOut } from 'lucide-react';
+import { Search, User, Wrench, LogOut } from 'lucide-react';
 import { getSession } from '@/lib/auth';
 import { logoutAction } from '@/app/(auth)/actions';
+import { CartBadge } from '@/components/cart-badge';
 
 export async function SiteHeader() {
   const session = await getSession();
@@ -42,10 +43,7 @@ export async function SiteHeader() {
               </Link>
             )}
 
-            <button className="hover:text-paper transition-colors flex items-center gap-1.5" aria-label="Cart">
-              <ShoppingCart size={18} />
-              <span className="hidden lg:inline">Cart</span>
-            </button>
+            <CartBadge />
           </nav>
         </div>
 

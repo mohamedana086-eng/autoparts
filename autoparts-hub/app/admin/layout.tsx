@@ -34,8 +34,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         </nav>
         <div className="mt-8 grid gap-1 text-xs text-mute">
           <p className="uppercase tracking-widest font-display font-bold mb-1">Reference</p>
-          <span className="flex items-center gap-2"><Package size={13} /> Product catalog</span>
-          <span className="flex items-center gap-2"><ClipboardList size={13} /> Orders</span>
+          <Link href="/search" className="flex items-center gap-2 hover:text-paper transition-colors">
+            <Package size={13} /> Product catalog
+          </Link>
+          <Link href="/admin/orders" className="flex items-center gap-2 hover:text-paper transition-colors">
+            <ClipboardList size={13} /> Orders
+          </Link>
         </div>
       </aside>
       <section>{children}</section>

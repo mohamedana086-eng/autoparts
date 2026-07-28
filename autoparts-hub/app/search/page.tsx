@@ -101,7 +101,9 @@ export default async function SearchPage({
               <p className="font-medium">{p.name}</p>
               <p className="text-xs text-mute mt-1">{p.vehicleSystem.name}</p>
               <div className="flex items-center gap-3 mt-2 text-xs text-mute">
-                <span className="flex items-center gap-1"><Clock size={12} /> {p.stockDays} day delivery</span>
+                <span className="flex items-center gap-1">
+                  <Clock size={12} /> {p.stockDays} day{p.stockDays === 1 ? '' : 's'} delivery
+                </span>
                 <span className="flex items-center gap-1 text-stock"><PackageCheck size={12} /> In stock</span>
               </div>
             </div>

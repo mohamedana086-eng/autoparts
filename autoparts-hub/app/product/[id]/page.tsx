@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db';
 import { resolvePrice, MarkupRule } from '@/lib/pricing';
 import { getSession } from '@/lib/auth';
 import { Clock, PackageCheck, ShieldCheck, ArrowLeftRight } from 'lucide-react';
+import { AddToCart } from '@/components/add-to-cart';
 
 async function getProduct(id: string) {
   const product = await prisma.product.findUnique({
@@ -91,7 +92,9 @@ export default async function ProductPage({ params }: { params: { id: string } }
         <div className="grid grid-cols-2 gap-3 mt-6 text-center">
           <div className="border border-ink-line rounded-plate py-3">
             <Clock size={16} className="mx-auto mb-1 text-mute" />
-            <p className="text-xs font-mono">{product.stockDays} days</p>
+            <p className="text-xs font-mono">
+              {product.stockDays} day{product.stockDays === 1 ? '' : 's'}
+            </p>
           </div>
           <div className="border border-ink-line rounded-plate py-3">
             <PackageCheck size={16} className="mx-auto mb-1 text-stock" />
@@ -99,9 +102,16 @@ export default async function ProductPage({ params }: { params: { id: string } }
           </div>
         </div>
 
-        <button className="w-full mt-6 bg-signal hover:bg-signal-dim text-ink font-display font-bold py-3 rounded-plate transition-colors">
-          Add to cart
-        </button>
+        <AddToCart
+          item={{
+            id: product.id,
+            partNumber: product.partNumber,
+            name: product.name,
+            manufacturer: product.manufacturer.name,
+            unitPrice: pricing?.finalPrice ?? product.basePrice,
+            stockDays: product.stockDays,
+          }}
+        />
 
         <p className="flex items-center gap-1.5 text-[11px] text-mute mt-4">
           <ShieldCheck size={13} /> Fitment verified against OE reference
