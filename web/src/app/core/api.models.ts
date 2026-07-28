@@ -43,10 +43,15 @@ export interface SearchResponse {
   systemName: string | null;
   system: string | null;
   manufacturer: string | null;
+  minPrice: number | null;
+  maxPrice: number | null;
   sort: SearchSort;
+  /** True when nothing matched as typed and these are close matches. */
+  fuzzy: boolean;
   tierName: string;
   isLoggedIn: boolean;
   count: number;
+  priceRange: { min: number; max: number } | null;
   facets: { systems: SystemFacet[]; manufacturers: BrandFacet[] };
   products: ProductSummary[];
 }

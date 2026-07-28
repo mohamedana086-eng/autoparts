@@ -28,6 +28,13 @@ const SORT_LABELS: Array<{ value: SearchSort; label: string }> = [
         }
       </div>
 
+      @if (data()?.fuzzy) {
+        <p class="text-sm border border-signal/30 bg-signal/10 rounded-plate px-3 py-2 mb-4">
+          Nothing matches <span class="font-mono">{{ query() }}</span> exactly — these are the
+          closest parts we carry.
+        </p>
+      }
+
       <p class="text-xs text-mute mb-6">
         @if (data()?.isLoggedIn) {
           Prices shown at your <span class="text-paper">{{ data()!.tierName }}</span> tier.
@@ -84,6 +91,25 @@ const SORT_LABELS: Array<{ value: SearchSort; label: string }> = [
               }
             </select>
           </label>
+        </div>
+      }
+
+      @if (data()?.priceRange; as range) {
+        <div class="flex flex-wrap items-center gap-2 mb-6 text-[11px] uppercase tracking-wider text-mute">
+          <span class="mr-1">Price</span>
+          <input type="number" inputmode="decimal" min="0" [value]="minPrice()"
+                 (input)="minPrice.set($any($event.target).value)" (change)="applyPrice()"
+                 [attr.placeholder]="'€' + range.min" aria-label="Minimum price"
+                 class="w-20 bg-ink-panel border border-ink-line rounded-plate px-2 py-1 text-xs text-paper font-mono normal-case" />
+          <span class="normal-case">to</span>
+          <input type="number" inputmode="decimal" min="0" [value]="maxPrice()"
+                 (input)="maxPrice.set($any($event.target).value)" (change)="applyPrice()"
+                 [attr.placeholder]="'€' + range.max" aria-label="Maximum price"
+                 class="w-20 bg-ink-panel border border-ink-line rounded-plate px-2 py-1 text-xs text-paper font-mono normal-case" />
+          @if (data()!.minPrice !== null || data()!.maxPrice !== null) {
+            <button type="button" (click)="clearPrice()"
+                    class="text-signal hover:underline normal-case tracking-normal">Clear</button>
+          }
         </div>
       }
 
@@ -163,6 +189,8 @@ export class SearchPage {
   protected readonly query = signal('');
   protected readonly skeletons = Array.from({ length: 3 }, (_, i) => i);
   protected readonly sorts = SORT_LABELS;
+  protected readonly minPrice = signal('');
+  protected readonly maxPrice = signal('');
 
   protected readonly activeChip = 'border-signal bg-signal/10 text-paper';
   protected readonly idleChip = 'border-ink-line text-mute hover:text-paper';
@@ -173,6 +201,9 @@ export class SearchPage {
     this.route.queryParamMap.subscribe((params) => {
       const q = params.get('q') ?? '';
       this.query.set(q);
+      // Mirror the URL so the inputs survive a reload or a shared link.
+      this.minPrice.set(params.get('minPrice') ?? '');
+      this.maxPrice.set(params.get('maxPrice') ?? '');
       this.loading.set(true);
       this.error.set(null);
 
@@ -182,6 +213,8 @@ export class SearchPage {
           system: params.get('system'),
           manufacturer: params.get('manufacturer'),
           sort: params.get('sort'),
+          minPrice: params.get('minPrice'),
+          maxPrice: params.get('maxPrice'),
         })
         .subscribe({
           next: (res) => {
@@ -216,5 +249,18 @@ export class SearchPage {
 
   protected setSort(sort: string): void {
     this.merge({ sort: sort === 'relevance' ? null : sort });
+  }
+
+  protected applyPrice(): void {
+    this.merge({
+      minPrice: this.minPrice().trim() || null,
+      maxPrice: this.maxPrice().trim() || null,
+    });
+  }
+
+  protected clearPrice(): void {
+    this.minPrice.set('');
+    this.maxPrice.set('');
+    this.merge({ minPrice: null, maxPrice: null });
   }
 }

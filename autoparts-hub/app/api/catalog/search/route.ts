@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import {
-  idsMatchingNormalisedPartNumber, loadPricingContext, normalisePartNumber, priceFor,
+  idsByFuzzyMatch, idsMatchingNormalisedPartNumber, loadPricingContext, normalisePartNumber, priceFor,
 } from '@/lib/catalog';
 
 type Sort = 'relevance' | 'price-asc' | 'price-desc' | 'delivery';
@@ -28,6 +28,15 @@ export async function GET(req: NextRequest) {
     ? Math.min(requestedLimit, MAX_RESULTS)
     : MAX_RESULTS;
 
+  const priceBound = (key: string) => {
+    const raw = searchParams.get(key);
+    if (raw === null || raw === '') return null;
+    const n = Number(raw);
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  };
+  const minPrice = priceBound('minPrice');
+  const maxPrice = priceBound('maxPrice');
+
   // Every word has to land somewhere, but not all in the same field — that is
   // what lets "bosch brake pad" work, where the brand is on one column and the
   // rest of the words are on another.
@@ -49,7 +58,9 @@ export async function GET(req: NextRequest) {
 
   // Filtered by the query only. System and brand are applied below so their
   // facet counts can be taken before each one narrows the list.
-  const [matches, systemRecord, ctx] = await Promise.all([
+  const include = { manufacturer: true, vehicleSystem: true, interchanges: true } as const;
+
+  let [matches, systemRecord, ctx] = await Promise.all([
     prisma.product.findMany({
       where: q
         ? {
@@ -59,12 +70,27 @@ export async function GET(req: NextRequest) {
             ],
           }
         : {},
-      include: { manufacturer: true, vehicleSystem: true, interchanges: true },
+      include,
       take: MAX_RESULTS,
     }),
     system ? prisma.vehicleSystem.findUnique({ where: { slug: system } }) : Promise.resolve(null),
     loadPricingContext(),
   ]);
+
+  // Nothing matched as typed — try again allowing for a misspelling, and say
+  // so in the response so the UI does not present guesses as exact hits.
+  let fuzzy = false;
+  if (q && matches.length === 0) {
+    const closeIds = await idsByFuzzyMatch(q);
+    if (closeIds.length) {
+      const close = await prisma.product.findMany({ where: { id: { in: closeIds } }, include });
+      // Keep the order the similarity scoring produced.
+      const rank = new Map(closeIds.map((id, i) => [id, i]));
+      close.sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0));
+      matches = close;
+      fuzzy = true;
+    }
+  }
 
   const systemCounts = new Map<string, { slug: string; name: string; count: number }>();
   for (const p of matches) {
@@ -91,7 +117,7 @@ export async function GET(req: NextRequest) {
 
   const scored = inSystem
     .filter((p) => !manufacturer || p.manufacturer.name.toLowerCase() === manufacturer.toLowerCase())
-    .map((p) => {
+    .map((p, index) => {
       const normalisedPart = normalisePartNumber(p.partNumber);
       const name = p.name.toLowerCase();
       const brand = p.manufacturer.name.toLowerCase();
@@ -101,7 +127,12 @@ export async function GET(req: NextRequest) {
       let matchedOn: MatchedOn = 'description';
       let matchedVia: string | null = null;
 
-      if (!q) {
+      if (fuzzy) {
+        // Nothing matched literally, so the only meaningful order is how
+        // close the database scored each row. Keep it.
+        rank = index;
+        matchedOn = 'name';
+      } else if (!q) {
         rank = 0;
       } else if (needle && normalisedPart === needle) {
         rank = 0;
@@ -154,7 +185,20 @@ export async function GET(req: NextRequest) {
       };
     });
 
-  scored.sort((a, b) => {
+  // Bounds describe what is available before the price filter narrows it, so
+  // the UI can show the range the slider or inputs sit in.
+  const prices = scored.map((s) => s.product.price);
+  const priceRange = prices.length
+    ? { min: Math.floor(Math.min(...prices)), max: Math.ceil(Math.max(...prices)) }
+    : null;
+
+  const withinPrice = scored.filter(
+    (s) =>
+      (minPrice === null || s.product.price >= minPrice) &&
+      (maxPrice === null || s.product.price <= maxPrice)
+  );
+
+  withinPrice.sort((a, b) => {
     switch (sort) {
       case 'price-asc':
         return a.product.price - b.product.price;
@@ -172,10 +216,15 @@ export async function GET(req: NextRequest) {
     systemName: systemRecord?.name ?? null,
     system: system ?? null,
     manufacturer: manufacturer ?? null,
+    minPrice,
+    maxPrice,
     sort,
+    /** True when nothing matched as typed and these are close matches. */
+    fuzzy,
     tierName: ctx.tierName,
     isLoggedIn: ctx.isLoggedIn,
-    count: scored.length,
+    count: withinPrice.length,
+    priceRange,
     facets: {
       systems: [...systemCounts.values()].sort(
         (a, b) => b.count - a.count || a.name.localeCompare(b.name)
@@ -184,6 +233,6 @@ export async function GET(req: NextRequest) {
         .map(([name, count]) => ({ name, count }))
         .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
     },
-    products: scored.slice(0, limit).map((s) => s.product),
+    products: withinPrice.slice(0, limit).map((s) => s.product),
   });
 }

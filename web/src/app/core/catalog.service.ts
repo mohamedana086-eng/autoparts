@@ -16,6 +16,8 @@ export class CatalogService {
     system?: string | null;
     manufacturer?: string | null;
     sort?: string | null;
+    minPrice?: string | null;
+    maxPrice?: string | null;
     limit?: number;
   }): Observable<SearchResponse> {
     let params = new HttpParams();
@@ -23,6 +25,8 @@ export class CatalogService {
     if (opts.system) params = params.set('system', opts.system);
     if (opts.manufacturer) params = params.set('manufacturer', opts.manufacturer);
     if (opts.sort && opts.sort !== 'relevance') params = params.set('sort', opts.sort);
+    if (opts.minPrice) params = params.set('minPrice', opts.minPrice);
+    if (opts.maxPrice) params = params.set('maxPrice', opts.maxPrice);
     if (opts.limit) params = params.set('limit', String(opts.limit));
     return this.http.get<SearchResponse>('/api/catalog/search', { params });
   }

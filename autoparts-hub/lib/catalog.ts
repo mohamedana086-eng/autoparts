@@ -117,3 +117,41 @@ export async function idsMatchingNormalisedPartNumber(q: string): Promise<string
 
   return rows.map((r) => r.id);
 }
+
+/** Below this a trigram match is more noise than help — tuned against the
+ *  catalogue, where a genuine typo scores about 0.6 and up. */
+const FUZZY_THRESHOLD = 0.45;
+
+/**
+ * Closest products to a query that matched nothing exactly, ordered by how
+ * close they are.
+ *
+ * `word_similarity` compares the query against the best-matching run of
+ * words in the target rather than the whole string, so "brak pad" still
+ * scores against "Brake pad set, front" without the rest of the name
+ * dragging it down. Needs pg_trgm — see the trigram migration.
+ */
+export async function idsByFuzzyMatch(q: string): Promise<string[]> {
+  const needle = q.trim().toLowerCase();
+  if (needle.length < 3) return [];
+
+  const rows = await prisma.$queryRaw<Array<{ id: string }>>`
+    SELECT p."id",
+           GREATEST(
+             word_similarity(${needle}, lower(p."name")),
+             word_similarity(${needle}, lower(m."name")),
+             similarity(lower(p."partNumber"), ${needle})
+           ) AS score
+    FROM "Product" p
+    JOIN "Manufacturer" m ON m."id" = p."manufacturerId"
+    WHERE GREATEST(
+            word_similarity(${needle}, lower(p."name")),
+            word_similarity(${needle}, lower(m."name")),
+            similarity(lower(p."partNumber"), ${needle})
+          ) >= ${FUZZY_THRESHOLD}
+    ORDER BY score DESC, p."name" ASC
+    LIMIT 25
+  `;
+
+  return rows.map((r) => r.id);
+}
