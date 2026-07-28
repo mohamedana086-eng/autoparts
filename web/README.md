@@ -52,6 +52,17 @@ command, but not this one, and a git-triggered build with it left at `.`
 starts from the repository root, where there is no application to build.
 Project → Settings → Build & Deployment → Root Directory.
 
+Mind which project you are editing: the API's Vercel project and the
+directory it builds from are both called `autoparts-hub`, while the
+storefront's project is `autoparts-storefront` and its directory is `web`.
+The repository is laid out as:
+
+```
+autoparts/
+├─ autoparts-hub/   → project autoparts-hub        (the API)
+└─ web/             → project autoparts-storefront (this app)
+```
+
 The `/api` rewrite in `vercel.json` is what keeps the session cookie
 first-party. Pointing the Angular app straight at a different origin would
 need CORS plus `SameSite=None`, and browsers that block third-party cookies
