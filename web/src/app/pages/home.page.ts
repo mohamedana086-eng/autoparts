@@ -1,11 +1,12 @@
 import { Component, inject, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { CatalogService } from '../core/catalog.service';
+import { SystemIcon } from '../shell/system-icon';
 import type { VehicleSystem } from '../core/api.models';
 
 @Component({
   selector: 'app-home',
-  imports: [RouterLink],
+  imports: [RouterLink, SystemIcon],
   template: `
     <section class="hatch border-b border-ink-line">
       <div class="max-w-7xl mx-auto px-6 py-16 grid md:grid-cols-[1.2fr_1fr] gap-10 items-center">
@@ -74,7 +75,8 @@ import type { VehicleSystem } from '../core/api.models';
           @for (s of systems(); track s.id) {
             <a [routerLink]="['/search']" [queryParams]="{ system: s.slug }"
                class="group border border-ink-line rounded-plate bg-ink-panel hover:border-signal/60 hover:bg-ink-raised transition-colors p-4 flex flex-col items-center text-center gap-2">
-              <span class="w-[22px] h-[22px] rounded-full border-2 border-mute group-hover:border-signal transition-colors"></span>
+              <app-system-icon [name]="s.icon"
+                               class="text-mute group-hover:text-signal transition-colors" />
               <span class="text-xs font-medium leading-tight">{{ s.name }}</span>
             </a>
           }
