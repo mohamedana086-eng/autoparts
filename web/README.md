@@ -35,18 +35,30 @@ Price 9 tier, via the markup rule that matches.
 
 ## Deploying
 
-Two Vercel projects off one repository:
+Two Vercel projects off one repository, both connected to it so a push to
+`main` redeploys them:
 
-1. **API** — Root Directory `autoparts-hub`, with `DATABASE_URL` and
-   `AUTH_SECRET` set.
-2. **Storefront** — Root Directory `web`. Edit `vercel.json` and replace the
-   rewrite destination with the API deployment's URL.
+| Project | Root Directory | Live |
+|---|---|---|
+| `autoparts-hub` (API) | `autoparts-hub` | https://autoparts-hub-phi.vercel.app |
+| `autoparts-storefront` | `web` | https://autoparts-storefront.vercel.app |
 
-The rewrite is what keeps the cookie first-party. Pointing the Angular app
-straight at a different origin would need CORS plus `SameSite=None`, and
-browsers that block third-party cookies would silently drop the session.
+The API project needs `DATABASE_URL` and `AUTH_SECRET`. The storefront needs
+nothing — it holds no secrets and reads everything through `/api`.
+
+**Root Directory has to be set in the dashboard.** `vercel project update`
+covers the framework preset, build command, output directory and install
+command, but not this one, and a git-triggered build with it left at `.`
+starts from the repository root, where there is no application to build.
+Project → Settings → Build & Deployment → Root Directory.
+
+The `/api` rewrite in `vercel.json` is what keeps the session cookie
+first-party. Pointing the Angular app straight at a different origin would
+need CORS plus `SameSite=None`, and browsers that block third-party cookies
+would silently drop the session.
 
 ## Not built yet
 
-The admin panel is still served by the Next app at `/admin`. Checkout does not
-submit orders — the cart is browser-only.
+Checkout does not submit orders — the cart is browser-only. The Next app
+still serves its own copy of the UI at `/` and `/admin`; nothing routes to
+it now that Angular covers both.
