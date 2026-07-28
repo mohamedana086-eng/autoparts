@@ -13,7 +13,9 @@ export async function GET(req: NextRequest) {
     prisma.product.findMany({
       where: searchWhere(q, system),
       include: { manufacturer: true, vehicleSystem: true },
-      take: 60,
+      // Enough to return a whole system, or the unfiltered catalogue, without
+      // silently cutting results off. Needs real paging well before this.
+      take: 200,
     }),
     system ? prisma.vehicleSystem.findUnique({ where: { slug: system } }) : Promise.resolve(null),
     loadPricingContext(),
