@@ -28,6 +28,11 @@ const SORT_LABELS: Array<{ value: SearchSort; label: string }> = [
         }
       </div>
 
+      <p class="text-xs text-mute mb-3">
+        Got a whole list?
+        <a routerLink="/bulk" class="text-signal hover:underline">Check a spreadsheet of part numbers</a>.
+      </p>
+
       @if (data()?.fuzzy) {
         <p class="text-sm border border-signal/30 bg-signal/10 rounded-plate px-3 py-2 mb-4">
           Nothing matches <span class="font-mono">{{ query() }}</span> exactly — these are the

@@ -28,6 +28,10 @@ import type { VehicleSystem } from '../core/api.models';
               Search
             </button>
           </form>
+          <p class="text-xs text-mute mt-3">
+            Buying for a workshop?
+            <a routerLink="/bulk" class="text-signal hover:underline">Check a whole spreadsheet at once</a>.
+          </p>
         </div>
 
         <div class="relative border border-ink-line rounded-plate bg-ink-panel p-5">
