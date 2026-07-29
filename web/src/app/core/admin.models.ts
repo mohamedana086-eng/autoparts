@@ -66,3 +66,35 @@ export interface AdminOrder {
   units: number;
   total: number;
 }
+
+export const ORDER_STATUSES = ['order_is_sent', 'processing', 'shipped', 'paid'] as const;
+
+export interface AdminProduct {
+  id: string;
+  partNumber: string;
+  name: string;
+  description: string | null;
+  basePrice: number;
+  stockDays: number;
+  manufacturerId: string;
+  manufacturerName: string | null;
+  vehicleSystemId: string;
+  systemName: string | null;
+  interchangeCount: number;
+}
+
+export interface ProductInput {
+  partNumber: string;
+  name: string;
+  description: string;
+  manufacturerId: string;
+  vehicleSystemId: string;
+  basePrice: number;
+  stockDays: number;
+}
+
+export interface ProductsResponse {
+  products: AdminProduct[];
+  manufacturers: TierRef[];
+  systems: TierRef[];
+}

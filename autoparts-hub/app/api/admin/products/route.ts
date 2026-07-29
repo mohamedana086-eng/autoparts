@@ -1,0 +1,89 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/db';
+import { requireAdmin } from '@/lib/admin-guard';
+import { readProductInput, serialiseProduct } from '@/lib/admin-products';
+
+// GET /api/admin/products?q= — catalogue rows plus what the editor's selects need.
+export async function GET(req: NextRequest) {
+  const denied = await requireAdmin();
+  if (denied) return denied;
+
+  const q = new URL(req.url).searchParams.get('q')?.trim() ?? '';
+
+  // Brand is included deliberately: an admin looking for "brembo" means the
+  // brand, and leaving it out made the filter answer nothing for it while the
+  // storefront found the parts.
+  const where = q
+    ? {
+        OR: [
+          { partNumber: { contains: q, mode: 'insensitive' as const } },
+          { name: { contains: q, mode: 'insensitive' as const } },
+          { manufacturer: { name: { contains: q, mode: 'insensitive' as const } } },
+          { vehicleSystem: { name: { contains: q, mode: 'insensitive' as const } } },
+        ],
+      }
+    : {};
+
+  const [products, manufacturers, systems] = await Promise.all([
+    prisma.product.findMany({
+      where,
+      include: {
+        manufacturer: true,
+        vehicleSystem: true,
+        _count: { select: { interchanges: true } },
+      },
+      orderBy: [{ vehicleSystem: { order: 'asc' } }, { partNumber: 'asc' }],
+      take: 300,
+    }),
+    prisma.manufacturer.findMany({ orderBy: { name: 'asc' } }),
+    prisma.vehicleSystem.findMany({ orderBy: { order: 'asc' } }),
+  ]);
+
+  return NextResponse.json({
+    products: products.map(serialiseProduct),
+    manufacturers: manufacturers.map((m) => ({ id: m.id, name: m.name })),
+    systems: systems.map((s) => ({ id: s.id, name: s.name })),
+  });
+}
+
+// POST /api/admin/products
+export async function POST(req: NextRequest) {
+  const denied = await requireAdmin();
+  if (denied) return denied;
+
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: 'Expected a JSON body.' }, { status: 400 });
+  }
+
+  const parsed = readProductInput(body);
+  if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+
+  const [manufacturer, system, clash] = await Promise.all([
+    prisma.manufacturer.findUnique({ where: { id: parsed.value.manufacturerId } }),
+    prisma.vehicleSystem.findUnique({ where: { id: parsed.value.vehicleSystemId } }),
+    prisma.product.findUnique({ where: { partNumber: parsed.value.partNumber } }),
+  ]);
+
+  if (!manufacturer) return NextResponse.json({ error: 'Unknown manufacturer.' }, { status: 400 });
+  if (!system) return NextResponse.json({ error: 'Unknown vehicle system.' }, { status: 400 });
+  if (clash) {
+    return NextResponse.json(
+      { error: `Part number ${parsed.value.partNumber} is already in the catalogue.` },
+      { status: 409 }
+    );
+  }
+
+  const product = await prisma.product.create({
+    data: parsed.value,
+    include: {
+      manufacturer: true,
+      vehicleSystem: true,
+      _count: { select: { interchanges: true } },
+    },
+  });
+
+  return NextResponse.json({ product: serialiseProduct(product) }, { status: 201 });
+}

@@ -15,6 +15,7 @@ export const routes: Routes = [
     loadComponent: () => import('./admin/admin-layout').then((m) => m.AdminLayout),
     children: [
       { path: '', loadComponent: () => import('./admin/dashboard.page').then((m) => m.AdminDashboardPage) },
+      { path: 'products', loadComponent: () => import('./admin/products.page').then((m) => m.AdminProductsPage) },
       { path: 'clients', loadComponent: () => import('./admin/clients.page').then((m) => m.AdminClientsPage) },
       {
         path: 'client-categories',

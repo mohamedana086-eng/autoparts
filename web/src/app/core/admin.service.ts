@@ -1,8 +1,9 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import type {
-  AdminClient, AdminOrder, AdminStats, ClientCategory, MarkupRule, MarkupRulesResponse, TierRef,
+  AdminClient, AdminOrder, AdminProduct, AdminStats, ClientCategory, MarkupRule,
+  MarkupRulesResponse, ProductInput, ProductsResponse, TierRef,
 } from './admin.models';
 
 /**
@@ -65,5 +66,30 @@ export class AdminService {
 
   orders(): Promise<{ orders: AdminOrder[] }> {
     return firstValueFrom(this.http.get<{ orders: AdminOrder[] }>('/api/admin/orders'));
+  }
+
+  setOrderStatus(id: string, status: string): Promise<{ id: string; status: string }> {
+    return firstValueFrom(
+      this.http.patch<{ id: string; status: string }>(`/api/admin/orders/${id}`, { status })
+    );
+  }
+
+  products(q = ''): Promise<ProductsResponse> {
+    const params = q ? new HttpParams().set('q', q) : undefined;
+    return firstValueFrom(this.http.get<ProductsResponse>('/api/admin/products', { params }));
+  }
+
+  createProduct(input: ProductInput): Promise<{ product: AdminProduct }> {
+    return firstValueFrom(this.http.post<{ product: AdminProduct }>('/api/admin/products', input));
+  }
+
+  updateProduct(id: string, input: ProductInput): Promise<{ product: AdminProduct }> {
+    return firstValueFrom(
+      this.http.patch<{ product: AdminProduct }>(`/api/admin/products/${id}`, input)
+    );
+  }
+
+  deleteProduct(id: string): Promise<{ ok: boolean }> {
+    return firstValueFrom(this.http.delete<{ ok: boolean }>(`/api/admin/products/${id}`));
   }
 }

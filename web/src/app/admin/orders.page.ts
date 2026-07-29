@@ -1,6 +1,6 @@
 import { Component, inject, signal } from '@angular/core';
 import { AdminService } from '../core/admin.service';
-import type { AdminOrder } from '../core/admin.models';
+import { ORDER_STATUSES, type AdminOrder } from '../core/admin.models';
 
 const STATUS_STYLE: Record<string, string> = {
   order_is_sent: 'border-ink-line text-mute',
@@ -48,10 +48,15 @@ const STATUS_STYLE: Record<string, string> = {
                 <td class="px-4 py-3 text-mute text-xs font-mono">{{ o.createdAt.slice(0, 10) }}</td>
                 <td class="px-4 py-3 text-mute">{{ o.units }} unit{{ o.units === 1 ? '' : 's' }}</td>
                 <td class="px-4 py-3">
-                  <span class="text-[10px] font-mono uppercase px-2 py-1 rounded-plate border"
-                        [class]="statusClass(o.status)">
-                    {{ o.status.split('_').join(' ') }}
-                  </span>
+                  <select [value]="o.status" (change)="setStatus(o, $any($event.target).value)"
+                          [disabled]="busyId() === o.id"
+                          [attr.aria-label]="'Status for order ' + o.reference"
+                          class="bg-ink border rounded-plate px-2 py-1 text-[10px] font-mono uppercase disabled:opacity-50"
+                          [class]="statusClass(o.status)">
+                    @for (s of statuses; track s) {
+                      <option [value]="s" [selected]="o.status === s">{{ s.split('_').join(' ') }}</option>
+                    }
+                  </select>
                 </td>
                 <td class="px-4 py-3 text-right font-mono font-semibold text-signal">€{{ o.total.toFixed(2) }}</td>
               </tr>
@@ -68,6 +73,8 @@ export class AdminOrdersPage {
   protected readonly orders = signal<AdminOrder[]>([]);
   protected readonly loading = signal(true);
   protected readonly error = signal<string | null>(null);
+  protected readonly busyId = signal<string | null>(null);
+  protected readonly statuses = ORDER_STATUSES;
 
   constructor() {
     this.admin
@@ -84,5 +91,21 @@ export class AdminOrdersPage {
 
   protected statusClass(status: string): string {
     return STATUS_STYLE[status] ?? 'border-ink-line text-mute';
+  }
+
+  protected async setStatus(order: AdminOrder, status: string): Promise<void> {
+    if (status === order.status) return;
+    this.busyId.set(order.id);
+    this.error.set(null);
+    try {
+      const res = await this.admin.setOrderStatus(order.id, status);
+      this.orders.update((list) =>
+        list.map((o) => (o.id === order.id ? { ...o, status: res.status } : o))
+      );
+    } catch (err: any) {
+      this.error.set(err?.error?.error ?? 'Could not change that order.');
+    } finally {
+      this.busyId.set(null);
+    }
   }
 }
