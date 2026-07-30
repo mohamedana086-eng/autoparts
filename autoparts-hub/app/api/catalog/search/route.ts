@@ -20,6 +20,7 @@ export async function GET(req: NextRequest) {
   const system = searchParams.get('system')?.trim() || undefined;
   const manufacturer = searchParams.get('manufacturer')?.trim() || undefined;
   const variant = searchParams.get('variant')?.trim() || undefined;
+  const supplier = searchParams.get('supplier')?.trim() || undefined;
 
   const requestedSort = searchParams.get('sort') as Sort | null;
   const sort: Sort = requestedSort && SORTS.includes(requestedSort) ? requestedSort : 'relevance';
@@ -64,8 +65,10 @@ export async function GET(req: NextRequest) {
   // A vehicle narrows the catalogue to what actually fits it, and composes
   // with everything else rather than replacing it.
   const fitsVehicle = variant ? { fitments: { some: { variantId: variant } } } : {};
+  // Matched by slug so a supplier's page URL is the same value the filter uses.
+  const fromSupplier = supplier ? { supplier: { slug: supplier } } : {};
 
-  let [matches, systemRecord, variantRecord, ctx] = await Promise.all([
+  let [matches, systemRecord, variantRecord, supplierRecord, ctx] = await Promise.all([
     prisma.product.findMany({
       where: {
         AND: [
@@ -78,6 +81,7 @@ export async function GET(req: NextRequest) {
               }
             : {},
           fitsVehicle,
+          fromSupplier,
         ],
       },
       include,
@@ -90,6 +94,7 @@ export async function GET(req: NextRequest) {
           include: { model: { include: { make: true } } },
         })
       : Promise.resolve(null),
+    supplier ? prisma.supplier.findUnique({ where: { slug: supplier } }) : Promise.resolve(null),
     loadPricingContext(),
   ]);
 
@@ -100,7 +105,7 @@ export async function GET(req: NextRequest) {
     const closeIds = await idsByFuzzyMatch(q);
     if (closeIds.length) {
       const close = await prisma.product.findMany({
-        where: { AND: [{ id: { in: closeIds } }, fitsVehicle] },
+        where: { AND: [{ id: { in: closeIds } }, fitsVehicle, fromSupplier] },
         include,
       });
       // Keep the order the similarity scoring produced.
@@ -239,6 +244,8 @@ export async function GET(req: NextRequest) {
     variantLabel: variantRecord
       ? `${variantRecord.model.make.name} ${variantRecord.model.name} ${variantRecord.name}`
       : null,
+    supplier: supplier ?? null,
+    supplierName: supplierRecord?.name ?? null,
     minPrice,
     maxPrice,
     sort,

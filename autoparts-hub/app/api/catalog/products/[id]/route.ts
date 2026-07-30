@@ -6,7 +6,7 @@ import { loadPricingContext, priceFor } from '@/lib/catalog';
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   const product = await prisma.product.findUnique({
     where: { id: params.id },
-    include: { manufacturer: true, vehicleSystem: true, interchanges: true },
+    include: { manufacturer: true, vehicleSystem: true, interchanges: true, supplier: true },
   });
 
   if (!product) {
@@ -30,6 +30,9 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       stockDays: product.stockDays,
       price: pricing?.finalPrice ?? product.basePrice,
       appliedRule: pricing?.appliedRule ?? null,
+      supplier: product.supplier
+        ? { slug: product.supplier.slug, name: product.supplier.name }
+        : null,
       interchanges: product.interchanges.map((i) => ({
         id: i.id,
         partNumber: i.targetPartNo,

@@ -32,13 +32,15 @@ async function main() {
   );
 
   // --- Suppliers ---
+  // slug is what a supplier's public page is addressed by; seed-suppliers.ts
+  // fills in the descriptions and sources each part.
   const [ib16, np20, br02] = await Promise.all(
     [
-      ['IB16 Parts', 'IB16', 'official'],
-      ['NP20 Distribution', 'NP20', 'reliable'],
-      ['BR02 Supply', 'BR02', 'standard'],
-    ].map(([name, code, reliability]) =>
-      prisma.supplier.create({ data: { name, code, reliability } })
+      ['IB16 Parts', 'IB16', 'ib16-parts', 'official'],
+      ['NP20 Distribution', 'NP20', 'np20-distribution', 'reliable'],
+      ['BR02 Supply', 'BR02', 'br02-supply', 'standard'],
+    ].map(([name, code, slug, reliability]) =>
+      prisma.supplier.create({ data: { name, code, slug, reliability } })
     )
   );
 

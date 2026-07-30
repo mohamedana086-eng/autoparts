@@ -1,6 +1,6 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, firstValueFrom } from 'rxjs';
 import type { ProductResponse, SearchResponse, VehicleSystem } from './api.models';
 
 @Injectable({ providedIn: 'root' })
@@ -16,6 +16,7 @@ export class CatalogService {
     system?: string | null;
     manufacturer?: string | null;
     variant?: string | null;
+    supplier?: string | null;
     sort?: string | null;
     minPrice?: string | null;
     maxPrice?: string | null;
@@ -26,6 +27,7 @@ export class CatalogService {
     if (opts.system) params = params.set('system', opts.system);
     if (opts.manufacturer) params = params.set('manufacturer', opts.manufacturer);
     if (opts.variant) params = params.set('variant', opts.variant);
+    if (opts.supplier) params = params.set('supplier', opts.supplier);
     if (opts.sort && opts.sort !== 'relevance') params = params.set('sort', opts.sort);
     if (opts.minPrice) params = params.set('minPrice', opts.minPrice);
     if (opts.maxPrice) params = params.set('maxPrice', opts.maxPrice);
@@ -36,6 +38,11 @@ export class CatalogService {
   /** Small, ranked slice for the header's type-ahead. */
   suggest(q: string): Observable<SearchResponse> {
     return this.search({ q, limit: 6 });
+  }
+
+  /** Promise form, for callers that just need the result once. */
+  searchOnce(opts: Parameters<CatalogService['search']>[0]): Promise<SearchResponse> {
+    return firstValueFrom(this.search(opts));
   }
 
   product(id: string): Observable<ProductResponse> {

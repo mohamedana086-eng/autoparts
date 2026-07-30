@@ -32,7 +32,10 @@ model Supplier {
   id           String        @id @default(cuid())
   name         String
   code         String        @unique // e.g. IB16, NP20
+  slug         String        @unique // url for the supplier's own page
+  description  String?       // shown on that page
   reliability  String        @default("standard") // official | reliable | standard
+  products     Product[]
   markupRules  MarkupRule[]
 }
 
@@ -45,6 +48,11 @@ model Product {
   manufacturer   Manufacturer  @relation(fields: [manufacturerId], references: [id])
   vehicleSystemId String
   vehicleSystem  VehicleSystem @relation(fields: [vehicleSystemId], references: [id])
+  /// Who this part is bought from. Optional so a part can be listed before
+  /// sourcing is settled; the pricing engine falls back to the category
+  /// default when it is unset rather than to an arbitrary supplier.
+  supplierId     String?
+  supplier       Supplier?     @relation(fields: [supplierId], references: [id])
   basePrice      Float         // supplier purchase price, before markup
   currency       String        @default("EUR")
   stockDays      Int           @default(1) // delivery lead time in days

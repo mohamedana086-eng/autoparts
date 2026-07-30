@@ -80,7 +80,16 @@ import type { ProductResponse } from '../core/api.models';
             {{ added() ? 'Added to cart' : 'Add to cart' }}
           </button>
 
-          <p class="text-[11px] text-mute mt-4">Fitment verified against OE reference</p>
+          @if (product().supplier; as supplier) {
+            <p class="text-[11px] text-mute mt-4">
+              Supplied by
+              <a [routerLink]="['/supplier', supplier.slug]" class="text-signal hover:underline">
+                {{ supplier.name }}
+              </a>
+            </p>
+          }
+
+          <p class="text-[11px] text-mute mt-2">Fitment verified against OE reference</p>
         </aside>
       </div>
     }

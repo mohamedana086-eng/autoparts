@@ -39,6 +39,17 @@ const SORT_LABELS: Array<{ value: SearchSort; label: string }> = [
         </div>
       }
 
+      @if (data()?.supplierName; as supplierName) {
+        <div class="flex flex-wrap items-center gap-3 border border-ink-line rounded-plate px-3 py-2 mb-3">
+          <span class="text-sm">
+            Only parts from
+            <a [routerLink]="['/supplier', data()!.supplier]" class="text-signal hover:underline">{{ supplierName }}</a>
+          </span>
+          <button type="button" (click)="clearSupplier()"
+                  class="text-xs text-signal hover:underline ml-auto">Show all suppliers</button>
+        </div>
+      }
+
       <p class="text-xs text-mute mb-3">
         Got a whole list?
         <a routerLink="/bulk" class="text-signal hover:underline">Check a spreadsheet of part numbers</a>.
@@ -229,6 +240,7 @@ export class SearchPage {
           system: params.get('system'),
           manufacturer: params.get('manufacturer'),
           variant: params.get('variant'),
+          supplier: params.get('supplier'),
           sort: params.get('sort'),
           minPrice: params.get('minPrice'),
           maxPrice: params.get('maxPrice'),
@@ -279,6 +291,10 @@ export class SearchPage {
    *  car was selected often has nothing across the rest of the catalogue. */
   protected clearVehicle(): void {
     this.merge({ variant: null, manufacturer: null });
+  }
+
+  protected clearSupplier(): void {
+    this.merge({ supplier: null });
   }
 
   protected clearPrice(): void {

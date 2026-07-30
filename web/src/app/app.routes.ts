@@ -6,6 +6,8 @@ export const routes: Routes = [
   { path: '', loadComponent: () => import('./pages/home.page').then((m) => m.HomePage) },
   { path: 'search', loadComponent: () => import('./pages/search.page').then((m) => m.SearchPage) },
   { path: 'bulk', loadComponent: () => import('./pages/bulk.page').then((m) => m.BulkPage) },
+  { path: 'suppliers', loadComponent: () => import('./pages/suppliers.page').then((m) => m.SuppliersPage) },
+  { path: 'supplier/:slug', loadComponent: () => import('./pages/supplier.page').then((m) => m.SupplierPage) },
   { path: 'product/:id', loadComponent: () => import('./pages/product.page').then((m) => m.ProductPage) },
   { path: 'cart', loadComponent: () => import('./pages/cart.page').then((m) => m.CartPage) },
   { path: 'orders', loadComponent: () => import('./pages/orders.page').then((m) => m.OrdersPage) },

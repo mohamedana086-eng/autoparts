@@ -13,7 +13,6 @@ import { resolvePrice, type MarkupRule, type PriceResult } from '@/lib/pricing';
 export interface PricingContext {
   category: { id: string; name: string; markupPercent: number } | null;
   rules: MarkupRule[];
-  defaultSupplierId: string;
   tierName: string;
   isLoggedIn: boolean;
 }
@@ -25,17 +24,13 @@ export async function loadPricingContext(): Promise<PricingContext> {
     ? await prisma.clientCategory.findUnique({ where: { id: session.categoryId } })
     : await prisma.clientCategory.findFirst({ where: { name: 'Retail' } });
 
-  const [rules, supplier] = await Promise.all([
-    prisma.markupRule.findMany({ where: { active: true } }),
-    prisma.supplier.findFirst(),
-  ]);
+  const rules = await prisma.markupRule.findMany({ where: { active: true } });
 
   return {
     category: category
       ? { id: category.id, name: category.name, markupPercent: category.markupPercent }
       : null,
     rules: rules as unknown as MarkupRule[],
-    defaultSupplierId: supplier?.id ?? '',
     tierName: category?.name ?? 'Retail',
     isLoggedIn: !!session,
   };
@@ -44,6 +39,7 @@ export async function loadPricingContext(): Promise<PricingContext> {
 interface PriceableProduct {
   basePrice: number;
   partNumber: string;
+  supplierId?: string | null;
   manufacturer: { name: string };
   vehicleSystem: { slug: string };
 }
@@ -54,7 +50,10 @@ export function priceFor(product: PriceableProduct, ctx: PricingContext): PriceR
   return resolvePrice(
     {
       basePrice: product.basePrice,
-      supplierId: ctx.defaultSupplierId,
+      // The part's own supplier. This used to be whichever supplier the table
+      // happened to return first, which made every supplier markup rule either
+      // dead or catalogue-wide depending on row order.
+      supplierId: product.supplierId ?? '',
       manufacturerName: product.manufacturer.name,
       vehicleSystemSlug: product.vehicleSystem.slug,
       partNumber: product.partNumber,

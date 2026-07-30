@@ -45,6 +45,8 @@ export interface SearchResponse {
   manufacturer: string | null;
   variant: string | null;
   variantLabel: string | null;
+  supplier: string | null;
+  supplierName: string | null;
   minPrice: number | null;
   maxPrice: number | null;
   sort: SearchSort;
@@ -68,6 +70,7 @@ export interface Interchange {
 export interface ProductDetail extends ProductSummary {
   description: string | null;
   interchanges: Interchange[];
+  supplier: { slug: string; name: string } | null;
 }
 
 export interface ProductResponse {
