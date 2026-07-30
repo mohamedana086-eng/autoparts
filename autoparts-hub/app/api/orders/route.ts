@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
-import { loadPricingContext, priceFor } from '@/lib/catalog';
+import { loadPricingContext, priceFor, roundMoney } from '@/lib/catalog';
 
 const MAX_LINES = 200;
 const MAX_QTY = 999;
@@ -35,7 +35,7 @@ export async function GET() {
       status: o.status,
       createdAt: o.createdAt.toISOString(),
       units: o.items.reduce((n, i) => n + i.quantity, 0),
-      total: o.items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0),
+      total: roundMoney(o.items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0)),
       lines: o.items.map((i) => ({
         partNumber: i.product.partNumber,
         name: i.product.name,
@@ -106,7 +106,7 @@ export async function POST(req: NextRequest) {
     unitPrice: priceFor(p, ctx)?.finalPrice ?? p.basePrice,
   }));
 
-  const total = lines.reduce((sum, l) => sum + l.unitPrice * l.quantity, 0);
+  const total = roundMoney(lines.reduce((sum, l) => sum + l.unitPrice * l.quantity, 0));
 
   // The tier's minimum order is a rule the schema already carries; enforce it
   // here rather than letting it sit unused.

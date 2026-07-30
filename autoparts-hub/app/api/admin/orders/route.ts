@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { requireAdmin } from '@/lib/admin-guard';
+import { roundMoney } from '@/lib/catalog';
 
 // GET /api/admin/orders
 export async function GET() {
@@ -20,7 +21,7 @@ export async function GET() {
       status: o.status,
       createdAt: o.createdAt.toISOString(),
       units: o.items.reduce((n, i) => n + i.quantity, 0),
-      total: o.items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0),
+      total: roundMoney(o.items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0)),
     })),
   });
 }

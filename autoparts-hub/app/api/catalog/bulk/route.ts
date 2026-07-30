@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
-import { loadPricingContext, normalisePartNumber, priceFor } from '@/lib/catalog';
+import { loadPricingContext, normalisePartNumber, priceFor, roundMoney } from '@/lib/catalog';
 
 /** Guards the request against someone pasting a whole catalogue in. */
 const MAX_ROWS = 1000;
@@ -118,7 +118,7 @@ export async function POST(req: NextRequest) {
     maxRows: MAX_ROWS,
     foundCount: found.length,
     missingCount: rows.length - found.length,
-    total: found.reduce((sum, r) => sum + (r.product?.price ?? 0), 0),
+    total: roundMoney(found.reduce((sum, r) => sum + (r.product?.price ?? 0), 0)),
     rows,
   });
 }

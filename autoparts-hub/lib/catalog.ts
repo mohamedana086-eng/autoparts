@@ -84,6 +84,18 @@ export function searchWhere(q: string, system?: string) {
 }
 
 /**
+ * Rounds to cents.
+ *
+ * Summing line totals in binary floating point drifts — three parts at 6.85
+ * comes to 20.549999999999997. Harmless once a view formats it, but it also
+ * feeds the minimum-order comparison, where a total a hair under the
+ * threshold would refuse an order that actually meets it.
+ */
+export function roundMoney(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+/**
  * Strips everything that is not a letter or digit.
  *
  * Part numbers are printed with whatever separators the brand favours —
