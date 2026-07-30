@@ -26,8 +26,11 @@ it first-party, so no CORS setup and no `withCredentials` are needed.
 | `/` | Hero, search, browse-by-system grid |
 | `/search?q=&system=` | Results priced for the caller's tier |
 | `/product/:id` | Detail, interchanges, add to cart |
-| `/cart` | Quantities, totals, held in `localStorage` |
+| `/cart` | Quantities, totals, held in `localStorage`, checkout |
+| `/orders` | The signed-in customer's own order history |
+| `/bulk` | Check a spreadsheet of part numbers in one go |
 | `/login`, `/register` | Session auth against the API |
+| `/admin/**` | Dashboard, products, clients, tiers, markup rules, orders |
 
 Prices are resolved server-side from the session, so signing in changes what
 every page shows — a BMW cooling part is €70.82 at Retail and €50.45 on the
@@ -68,8 +71,16 @@ first-party. Pointing the Angular app straight at a different origin would
 need CORS plus `SameSite=None`, and browsers that block third-party cookies
 would silently drop the session.
 
+## Checkout
+
+The cart lives in `localStorage`, but placing an order sends only product ids
+and quantities. The API prices every line itself from the catalogue and the
+caller's tier, so a tampered cart cannot decide what it pays, and it enforces
+the tier's minimum order amount. The cart is cleared only once the order is
+recorded.
+
 ## Not built yet
 
-Checkout does not submit orders — the cart is browser-only. The Next app
-still serves its own copy of the UI at `/` and `/admin`; nothing routes to
-it now that Angular covers both.
+No payment step — an order is recorded as `order_is_sent` for the team to
+follow up. The Next app still serves its own copy of the UI at `/` and
+`/admin`; nothing routes to it now that Angular covers both.

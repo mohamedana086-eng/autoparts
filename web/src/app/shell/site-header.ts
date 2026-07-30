@@ -31,6 +31,7 @@ import type { ProductSummary } from '../core/api.models';
             }
 
             @if (auth.isLoggedIn()) {
+              <a routerLink="/orders" class="hover:text-paper transition-colors hidden sm:inline">Orders</a>
               <span class="hidden lg:inline text-paper text-xs">Hi, {{ firstName() }}</span>
               <button type="button" (click)="signOut()"
                       class="hover:text-paper transition-colors flex items-center gap-1.5" aria-label="Sign out">

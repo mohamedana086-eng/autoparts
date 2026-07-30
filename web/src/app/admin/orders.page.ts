@@ -24,8 +24,7 @@ const STATUS_STYLE: Record<string, string> = {
       <div class="border border-ink-line rounded-plate bg-ink-panel h-32 animate-pulse"></div>
     } @else if (orders().length === 0) {
       <div class="border border-dashed border-ink-line rounded-plate p-10 text-center text-mute text-sm">
-        No orders yet. Carts are held in the browser and are not submitted as orders, so
-        nothing reaches this table until checkout is wired up.
+        No orders yet. They appear here as soon as a signed-in customer places one.
       </div>
     } @else {
       <div class="border border-ink-line rounded-plate overflow-x-auto">

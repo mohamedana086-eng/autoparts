@@ -8,6 +8,7 @@ export const routes: Routes = [
   { path: 'bulk', loadComponent: () => import('./pages/bulk.page').then((m) => m.BulkPage) },
   { path: 'product/:id', loadComponent: () => import('./pages/product.page').then((m) => m.ProductPage) },
   { path: 'cart', loadComponent: () => import('./pages/cart.page').then((m) => m.CartPage) },
+  { path: 'orders', loadComponent: () => import('./pages/orders.page').then((m) => m.OrdersPage) },
   { path: 'login', loadComponent: () => import('./pages/login.page').then((m) => m.LoginPage) },
   { path: 'register', loadComponent: () => import('./pages/register.page').then((m) => m.RegisterPage) },
   {
