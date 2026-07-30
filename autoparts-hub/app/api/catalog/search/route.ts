@@ -19,6 +19,7 @@ export async function GET(req: NextRequest) {
   const q = searchParams.get('q')?.trim() ?? '';
   const system = searchParams.get('system')?.trim() || undefined;
   const manufacturer = searchParams.get('manufacturer')?.trim() || undefined;
+  const variant = searchParams.get('variant')?.trim() || undefined;
 
   const requestedSort = searchParams.get('sort') as Sort | null;
   const sort: Sort = requestedSort && SORTS.includes(requestedSort) ? requestedSort : 'relevance';
@@ -60,20 +61,35 @@ export async function GET(req: NextRequest) {
   // facet counts can be taken before each one narrows the list.
   const include = { manufacturer: true, vehicleSystem: true, interchanges: true } as const;
 
-  let [matches, systemRecord, ctx] = await Promise.all([
+  // A vehicle narrows the catalogue to what actually fits it, and composes
+  // with everything else rather than replacing it.
+  const fitsVehicle = variant ? { fitments: { some: { variantId: variant } } } : {};
+
+  let [matches, systemRecord, variantRecord, ctx] = await Promise.all([
     prisma.product.findMany({
-      where: q
-        ? {
-            OR: [
-              ...(normalisedIds.length ? [{ id: { in: normalisedIds } }] : []),
-              ...(tokenClauses.length ? [{ AND: tokenClauses }] : []),
-            ],
-          }
-        : {},
+      where: {
+        AND: [
+          q
+            ? {
+                OR: [
+                  ...(normalisedIds.length ? [{ id: { in: normalisedIds } }] : []),
+                  ...(tokenClauses.length ? [{ AND: tokenClauses }] : []),
+                ],
+              }
+            : {},
+          fitsVehicle,
+        ],
+      },
       include,
       take: MAX_RESULTS,
     }),
     system ? prisma.vehicleSystem.findUnique({ where: { slug: system } }) : Promise.resolve(null),
+    variant
+      ? prisma.vehicleVariant.findUnique({
+          where: { id: variant },
+          include: { model: { include: { make: true } } },
+        })
+      : Promise.resolve(null),
     loadPricingContext(),
   ]);
 
@@ -83,7 +99,10 @@ export async function GET(req: NextRequest) {
   if (q && matches.length === 0) {
     const closeIds = await idsByFuzzyMatch(q);
     if (closeIds.length) {
-      const close = await prisma.product.findMany({ where: { id: { in: closeIds } }, include });
+      const close = await prisma.product.findMany({
+        where: { AND: [{ id: { in: closeIds } }, fitsVehicle] },
+        include,
+      });
       // Keep the order the similarity scoring produced.
       const rank = new Map(closeIds.map((id, i) => [id, i]));
       close.sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0));
@@ -216,6 +235,10 @@ export async function GET(req: NextRequest) {
     systemName: systemRecord?.name ?? null,
     system: system ?? null,
     manufacturer: manufacturer ?? null,
+    variant: variant ?? null,
+    variantLabel: variantRecord
+      ? `${variantRecord.model.make.name} ${variantRecord.model.name} ${variantRecord.name}`
+      : null,
     minPrice,
     maxPrice,
     sort,

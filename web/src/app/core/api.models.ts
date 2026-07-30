@@ -43,6 +43,8 @@ export interface SearchResponse {
   systemName: string | null;
   system: string | null;
   manufacturer: string | null;
+  variant: string | null;
+  variantLabel: string | null;
   minPrice: number | null;
   maxPrice: number | null;
   sort: SearchSort;

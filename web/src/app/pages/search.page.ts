@@ -28,6 +28,17 @@ const SORT_LABELS: Array<{ value: SearchSort; label: string }> = [
         }
       </div>
 
+      @if (data()?.variantLabel; as vehicle) {
+        <div class="flex flex-wrap items-center gap-3 border border-signal/30 bg-signal/10 rounded-plate px-3 py-2 mb-3">
+          <span class="text-sm">
+            Showing only parts that fit
+            <span class="font-medium text-paper">{{ vehicle }}</span>
+          </span>
+          <button type="button" (click)="clearVehicle()"
+                  class="text-xs text-signal hover:underline ml-auto">Show all vehicles</button>
+        </div>
+      }
+
       <p class="text-xs text-mute mb-3">
         Got a whole list?
         <a routerLink="/bulk" class="text-signal hover:underline">Check a spreadsheet of part numbers</a>.
@@ -217,6 +228,7 @@ export class SearchPage {
           q,
           system: params.get('system'),
           manufacturer: params.get('manufacturer'),
+          variant: params.get('variant'),
           sort: params.get('sort'),
           minPrice: params.get('minPrice'),
           maxPrice: params.get('maxPrice'),
@@ -261,6 +273,12 @@ export class SearchPage {
       minPrice: this.minPrice().trim() || null,
       maxPrice: this.maxPrice().trim() || null,
     });
+  }
+
+  /** Drops the vehicle and the brand with it, since a brand chosen while a
+   *  car was selected often has nothing across the rest of the catalogue. */
+  protected clearVehicle(): void {
+    this.merge({ variant: null, manufacturer: null });
   }
 
   protected clearPrice(): void {

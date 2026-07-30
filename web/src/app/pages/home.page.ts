@@ -2,11 +2,12 @@ import { Component, inject, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { CatalogService } from '../core/catalog.service';
 import { SystemIcon } from '../shell/system-icon';
+import { VehiclePicker } from '../shell/vehicle-picker';
 import type { VehicleSystem } from '../core/api.models';
 
 @Component({
   selector: 'app-home',
-  imports: [RouterLink, SystemIcon],
+  imports: [RouterLink, SystemIcon, VehiclePicker],
   template: `
     <section class="hatch border-b border-ink-line">
       <div class="max-w-7xl mx-auto px-6 py-16 grid md:grid-cols-[1.2fr_1fr] gap-10 items-center">
@@ -56,6 +57,10 @@ import type { VehicleSystem } from '../core/api.models';
           </div>
         </div>
       </div>
+    </section>
+
+    <section class="max-w-7xl mx-auto px-6 pt-10">
+      <app-vehicle-picker />
     </section>
 
     <section class="max-w-7xl mx-auto px-6 py-14">

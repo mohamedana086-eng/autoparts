@@ -15,6 +15,7 @@ export class CatalogService {
     q?: string | null;
     system?: string | null;
     manufacturer?: string | null;
+    variant?: string | null;
     sort?: string | null;
     minPrice?: string | null;
     maxPrice?: string | null;
@@ -24,6 +25,7 @@ export class CatalogService {
     if (opts.q) params = params.set('q', opts.q);
     if (opts.system) params = params.set('system', opts.system);
     if (opts.manufacturer) params = params.set('manufacturer', opts.manufacturer);
+    if (opts.variant) params = params.set('variant', opts.variant);
     if (opts.sort && opts.sort !== 'relevance') params = params.set('sort', opts.sort);
     if (opts.minPrice) params = params.set('minPrice', opts.minPrice);
     if (opts.maxPrice) params = params.set('maxPrice', opts.maxPrice);
