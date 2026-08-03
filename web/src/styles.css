@@ -2,6 +2,85 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Shared pieces.
+ * --------------
+ * The same six or seven utility runs were copied into every template, which
+ * is how a chip ended up with hover on one page and not on another, and how
+ * three files each kept their own copy of the reliability badge colours.
+ * Naming them once means a change to how a control looks happens in one
+ * place, and a template says what a thing is rather than how it is painted.
+ */
+@layer components {
+  /* Filter chips. `chip` is the shape; `chip-on` / `chip-idle` is the state. */
+  .chip {
+    @apply text-xs px-2.5 py-1 rounded-plate border transition-colors;
+  }
+  .chip-idle {
+    @apply border-ink-line text-mute hover:text-paper hover:border-mute/40;
+  }
+  .chip-on {
+    @apply border-signal bg-signal/10 text-paper;
+  }
+  /* The count that rides inside a chip. */
+  .chip-count {
+    @apply font-mono text-[10px] opacity-70;
+  }
+
+  /* A surface: cards, table wrappers, sidebars. */
+  .panel {
+    @apply border border-ink-line rounded-plate bg-ink-panel;
+  }
+
+  /* Form controls. */
+  .field {
+    @apply bg-ink border border-ink-line rounded-plate px-3 py-2 text-sm text-paper;
+  }
+  .field-sm {
+    @apply bg-ink-panel border border-ink-line rounded-plate px-2 py-1 text-xs text-paper;
+  }
+
+  .btn-primary {
+    @apply bg-signal hover:bg-signal-dim disabled:opacity-60 text-ink font-display font-bold rounded-plate transition-colors;
+  }
+  .btn-quiet {
+    @apply text-mute hover:text-paper transition-colors;
+  }
+  .link-signal {
+    @apply text-signal hover:underline;
+  }
+
+  /* The small capitalised caption above a group of controls. */
+  .eyebrow {
+    @apply text-[11px] uppercase tracking-wider text-mute;
+  }
+
+  /* One block of filters in the sidebar, separated by a rule from the last. */
+  .filter-group {
+    @apply border-t border-ink-line pt-4 mt-4;
+  }
+  .filter-group:first-child {
+    @apply border-t-0 pt-0 mt-0;
+  }
+
+  /* Callouts. */
+  .note {
+    @apply border rounded-plate px-3 py-2 text-sm;
+  }
+  .note-signal {
+    @apply border-signal/30 bg-signal/10;
+  }
+  .note-quiet {
+    @apply border-ink-line;
+  }
+  .note-alert {
+    @apply border-alert/40 bg-alert/10 text-alert;
+  }
+  .note-stock {
+    @apply border-stock/40 bg-stock/10 text-stock;
+  }
+}
+
 :root {
   color-scheme: dark;
 }

@@ -31,11 +31,11 @@ import type { VehicleSystem } from '../core/api.models';
           </form>
           <p class="text-xs text-mute mt-3">
             Buying for a workshop?
-            <a routerLink="/bulk" class="text-signal hover:underline">Check a whole spreadsheet at once</a>.
+            <a routerLink="/bulk" class="link-signal">Check a whole spreadsheet at once</a>.
           </p>
         </div>
 
-        <div class="relative border border-ink-line rounded-plate bg-ink-panel p-5">
+        <div class="relative panel p-5">
           <p class="text-xs font-mono text-mute mb-3 uppercase tracking-widest">Sample lookup</p>
           <div class="plate relative rounded-plate px-4 py-3 mb-3">
             <p class="text-[10px] text-mute uppercase tracking-wider">Part number</p>
@@ -72,18 +72,18 @@ import type { VehicleSystem } from '../core/api.models';
       </div>
 
       @if (error()) {
-        <div class="border border-alert/40 bg-alert/10 rounded-plate p-4 text-sm text-alert">{{ error() }}</div>
+        <div class="note note-alert p-4">{{ error() }}</div>
       } @else if (loading()) {
         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
           @for (n of skeletons; track n) {
-            <div class="border border-ink-line rounded-plate bg-ink-panel h-[86px] animate-pulse"></div>
+            <div class="panel h-[86px] animate-pulse"></div>
           }
         </div>
       } @else {
         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
           @for (s of systems(); track s.id) {
             <a [routerLink]="['/search']" [queryParams]="{ system: s.slug }"
-               class="group border border-ink-line rounded-plate bg-ink-panel hover:border-signal/60 hover:bg-ink-raised transition-colors p-4 flex flex-col items-center text-center gap-2">
+               class="group panel hover:border-signal/60 hover:bg-ink-raised transition-colors p-4 flex flex-col items-center text-center gap-2">
               <app-system-icon [name]="s.icon"
                                class="text-mute group-hover:text-signal transition-colors" />
               <span class="text-xs font-medium leading-tight">{{ s.name }}</span>

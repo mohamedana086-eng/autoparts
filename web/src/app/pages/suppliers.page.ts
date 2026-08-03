@@ -16,18 +16,18 @@ import { SupplierBadges } from '../core/supplier-badges';
       </p>
 
       @if (error()) {
-        <div class="border border-alert/40 bg-alert/10 rounded-plate p-4 text-sm text-alert">{{ error() }}</div>
+        <div class="note note-alert p-4">{{ error() }}</div>
       } @else if (loading()) {
         <div class="grid gap-3">
           @for (n of [0, 1, 2]; track n) {
-            <div class="border border-ink-line rounded-plate bg-ink-panel h-28 animate-pulse"></div>
+            <div class="panel h-28 animate-pulse"></div>
           }
         </div>
       } @else {
         <div class="grid gap-3">
           @for (s of suppliers(); track s.id) {
             <a [routerLink]="['/supplier', s.slug]"
-               class="border border-ink-line rounded-plate bg-ink-panel hover:border-signal/50 transition-colors p-5 block">
+               class="panel hover:border-signal/50 transition-colors p-5 block">
               <div class="flex flex-wrap items-baseline gap-3">
                 <span class="font-display font-bold">{{ s.name }}</span>
                 <app-supplier-badges [reliability]="s.reliability" [acceptsReturns]="s.acceptsReturns" />

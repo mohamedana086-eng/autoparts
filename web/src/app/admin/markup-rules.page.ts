@@ -14,11 +14,11 @@ import type { MarkupRule, TierRef } from '../core/admin.models';
     </p>
 
     @if (error()) {
-      <div class="border border-alert/40 bg-alert/10 rounded-plate p-4 text-sm text-alert mb-4">{{ error() }}</div>
+      <div class="note note-alert p-4 mb-4">{{ error() }}</div>
     }
 
     @if (loading()) {
-      <div class="border border-ink-line rounded-plate bg-ink-panel h-40 animate-pulse mb-8"></div>
+      <div class="panel h-40 animate-pulse mb-8"></div>
     } @else {
       <div class="border border-ink-line rounded-plate overflow-x-auto mb-8">
         <table class="w-full text-sm min-w-[900px]">
@@ -67,25 +67,25 @@ import type { MarkupRule, TierRef } from '../core/admin.models';
       </div>
     }
 
-    <div class="border border-ink-line rounded-plate bg-ink-panel p-6">
+    <div class="panel p-6">
       <h2 class="font-display font-semibold mb-4">New markup rule</h2>
       <form class="grid md:grid-cols-3 gap-4" (submit)="create($event)">
         <label class="grid gap-1 text-xs text-mute md:col-span-2">
           Label
           <input required placeholder="e.g. BMW cooling parts — Price 9 club"
                  [value]="label()" (input)="label.set($any($event.target).value)"
-                 class="bg-ink border border-ink-line rounded-plate px-3 py-2 text-sm text-paper" />
+                 class="field" />
         </label>
         <label class="grid gap-1 text-xs text-mute">
           Priority (higher wins ties)
           <input type="number" [value]="priority()" (input)="priority.set($any($event.target).value)"
-                 class="bg-ink border border-ink-line rounded-plate px-3 py-2 text-sm text-paper" />
+                 class="field" />
         </label>
 
         <label class="grid gap-1 text-xs text-mute">
           Client category
           <select [value]="clientCategoryId()" (change)="clientCategoryId.set($any($event.target).value)"
-                  class="bg-ink border border-ink-line rounded-plate px-3 py-2 text-sm text-paper">
+                  class="field">
             <option value="">— any —</option>
             @for (c of categories(); track c.id) { <option [value]="c.id">{{ c.name }}</option> }
           </select>
@@ -93,7 +93,7 @@ import type { MarkupRule, TierRef } from '../core/admin.models';
         <label class="grid gap-1 text-xs text-mute">
           Supplier
           <select [value]="supplierId()" (change)="supplierId.set($any($event.target).value)"
-                  class="bg-ink border border-ink-line rounded-plate px-3 py-2 text-sm text-paper">
+                  class="field">
             <option value="">— any —</option>
             @for (s of suppliers(); track s.id) { <option [value]="s.id">{{ s.name }}</option> }
           </select>
@@ -101,7 +101,7 @@ import type { MarkupRule, TierRef } from '../core/admin.models';
         <label class="grid gap-1 text-xs text-mute">
           Vehicle system
           <select [value]="vehicleSystemSlug()" (change)="vehicleSystemSlug.set($any($event.target).value)"
-                  class="bg-ink border border-ink-line rounded-plate px-3 py-2 text-sm text-paper">
+                  class="field">
             <option value="">— any —</option>
             @for (s of systems(); track s.slug) { <option [value]="s.slug">{{ s.name }}</option> }
           </select>
@@ -110,31 +110,31 @@ import type { MarkupRule, TierRef } from '../core/admin.models';
         <label class="grid gap-1 text-xs text-mute">
           Manufacturer name
           <input placeholder="e.g. BMW" [value]="manufacturerName()" (input)="manufacturerName.set($any($event.target).value)"
-                 class="bg-ink border border-ink-line rounded-plate px-3 py-2 text-sm text-paper" />
+                 class="field" />
         </label>
         <label class="grid gap-1 text-xs text-mute">
           Part number prefix
           <input placeholder="e.g. 1713" [value]="partNumberPrefix()" (input)="partNumberPrefix.set($any($event.target).value)"
-                 class="bg-ink border border-ink-line rounded-plate px-3 py-2 text-sm text-paper" />
+                 class="field" />
         </label>
         <div></div>
 
         <label class="grid gap-1 text-xs text-mute">
           Purchase price from (€)
           <input type="number" step="0.01" [value]="purchasePriceFrom()" (input)="purchasePriceFrom.set($any($event.target).value)"
-                 class="bg-ink border border-ink-line rounded-plate px-3 py-2 text-sm text-paper" />
+                 class="field" />
         </label>
         <label class="grid gap-1 text-xs text-mute">
           Purchase price to (€)
           <input type="number" step="0.01" [value]="purchasePriceTo()" (input)="purchasePriceTo.set($any($event.target).value)"
-                 class="bg-ink border border-ink-line rounded-plate px-3 py-2 text-sm text-paper" />
+                 class="field" />
         </label>
         <div></div>
 
         <label class="grid gap-1 text-xs text-mute">
           Adjustment type
           <select [value]="type()" (change)="type.set($any($event.target).value)"
-                  class="bg-ink border border-ink-line rounded-plate px-3 py-2 text-sm text-paper">
+                  class="field">
             <option value="PERCENT">Percent (+%)</option>
             <option value="AMOUNT">Flat amount (+€)</option>
             <option value="FIXED">Fixed price (=€)</option>
@@ -143,11 +143,11 @@ import type { MarkupRule, TierRef } from '../core/admin.models';
         <label class="grid gap-1 text-xs text-mute">
           Value
           <input type="number" step="0.01" required [value]="value()" (input)="value.set($any($event.target).value)"
-                 class="bg-ink border border-ink-line rounded-plate px-3 py-2 text-sm text-paper" />
+                 class="field" />
         </label>
 
         <button type="submit" [disabled]="creating()"
-                class="md:col-span-3 mt-2 bg-signal hover:bg-signal-dim disabled:opacity-60 text-ink font-display font-bold py-2.5 rounded-plate transition-colors">
+                class="md:col-span-3 mt-2 btn-primary py-2.5">
           {{ creating() ? 'Creating…' : 'Create rule' }}
         </button>
       </form>

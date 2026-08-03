@@ -13,11 +13,11 @@ import type { ProductSummary, SearchResponse } from '../core/api.models';
     @if (error()) {
       <div class="max-w-5xl mx-auto px-6 py-16 text-center">
         <p class="text-mute text-sm">{{ error() }}</p>
-        <a routerLink="/suppliers" class="inline-block mt-4 text-signal hover:underline text-sm">All suppliers</a>
+        <a routerLink="/suppliers" class="inline-block mt-4 link-signal text-sm">All suppliers</a>
       </div>
     } @else if (loading() || !supplier()) {
       <div class="max-w-5xl mx-auto px-6 py-10">
-        <div class="h-32 border border-ink-line rounded-plate bg-ink-panel animate-pulse"></div>
+        <div class="h-32 panel animate-pulse"></div>
       </div>
     } @else {
       <div class="max-w-5xl mx-auto px-6 py-10">
@@ -36,15 +36,15 @@ import type { ProductSummary, SearchResponse } from '../core/api.models';
         }
 
         <div class="grid sm:grid-cols-3 gap-3 mb-8">
-          <div class="border border-ink-line rounded-plate bg-ink-panel p-4">
+          <div class="panel p-4">
             <p class="font-mono text-2xl font-bold">{{ supplier()!.productCount }}</p>
             <p class="text-xs text-mute mt-1">Parts listed</p>
           </div>
-          <div class="border border-ink-line rounded-plate bg-ink-panel p-4">
+          <div class="panel p-4">
             <p class="font-mono text-2xl font-bold">{{ supplier()!.brands.length }}</p>
             <p class="text-xs text-mute mt-1">Brands carried</p>
           </div>
-          <div class="border border-ink-line rounded-plate bg-ink-panel p-4">
+          <div class="panel p-4">
             <p class="font-mono text-2xl font-bold">
               {{ supplier()!.fastestDelivery === null ? '—' : supplier()!.fastestDelivery + 'd' }}
             </p>
@@ -68,7 +68,7 @@ import type { ProductSummary, SearchResponse } from '../core/api.models';
         <div class="flex items-baseline justify-between mb-4">
           <h2 class="font-display font-semibold text-sm">Their full range</h2>
           <a [routerLink]="['/search']" [queryParams]="{ supplier: supplier()!.slug }"
-             class="text-xs text-signal hover:underline">Search within this supplier</a>
+             class="text-xs link-signal">Search within this supplier</a>
         </div>
 
         @if (products().length === 0) {
@@ -81,7 +81,7 @@ import type { ProductSummary, SearchResponse } from '../core/api.models';
               Priced at your <span class="text-paper">{{ results()!.tierName }}</span> tier.
             } @else {
               Retail prices —
-              <a routerLink="/login" class="text-signal hover:underline">sign in</a>
+              <a routerLink="/login" class="link-signal">sign in</a>
               for your account's.
             }
           </p>
@@ -89,7 +89,7 @@ import type { ProductSummary, SearchResponse } from '../core/api.models';
           <div class="grid gap-3">
             @for (p of products(); track p.id) {
               <a [routerLink]="['/product', p.id]"
-                 class="border border-ink-line rounded-plate bg-ink-panel hover:border-signal/50 transition-colors p-4 grid grid-cols-1 md:grid-cols-[auto_1fr_auto] gap-4 items-center">
+                 class="panel hover:border-signal/50 transition-colors p-4 grid grid-cols-1 md:grid-cols-[auto_1fr_auto] gap-4 items-center">
                 <div class="plate relative rounded-plate px-4 py-2 w-fit">
                   <p class="text-[9px] text-mute uppercase tracking-wider">{{ p.manufacturer }}</p>
                   <p class="font-mono font-semibold text-sm">{{ p.partNumber }}</p>

@@ -58,13 +58,13 @@ import { AuthService } from '../core/auth.service';
         </label>
 
         <button type="submit" [disabled]="pending()"
-                class="w-full bg-signal hover:bg-signal-dim disabled:opacity-60 text-ink font-display font-bold py-2.5 rounded-plate transition-colors">
+                class="w-full btn-primary py-2.5">
           {{ pending() ? 'Creating account…' : 'Create account' }}
         </button>
       </form>
 
       <p class="text-xs text-mute mt-6 text-center">
-        Already have an account? <a routerLink="/login" class="text-signal hover:underline">Sign in</a>
+        Already have an account? <a routerLink="/login" class="link-signal">Sign in</a>
       </p>
     </div>
   `,

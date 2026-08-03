@@ -8,11 +8,11 @@ import type { AdminStats } from '../core/admin.models';
     <h1 class="font-display text-2xl font-bold mb-6">Dashboard</h1>
 
     @if (error()) {
-      <div class="border border-alert/40 bg-alert/10 rounded-plate p-4 text-sm text-alert">{{ error() }}</div>
+      <div class="note note-alert p-4">{{ error() }}</div>
     } @else {
       <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
         @for (s of tiles(); track s.label) {
-          <div class="border border-ink-line rounded-plate bg-ink-panel p-5">
+          <div class="panel p-5">
             <p class="font-mono text-2xl font-bold">
               {{ stats() ? s.value : '—' }}
             </p>
@@ -22,7 +22,7 @@ import type { AdminStats } from '../core/admin.models';
       </div>
     }
 
-    <div class="mt-10 border border-ink-line rounded-plate bg-ink-panel p-6">
+    <div class="mt-10 panel p-6">
       <h2 class="font-display font-semibold mb-2">How pricing resolves</h2>
       <p class="text-sm text-mute leading-relaxed">
         Every price shown to a client is computed at request time: the engine looks for the

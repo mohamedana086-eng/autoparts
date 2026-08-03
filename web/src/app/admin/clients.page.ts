@@ -12,14 +12,14 @@ import type { AdminClient, TierRef } from '../core/admin.models';
     </p>
 
     @if (error()) {
-      <div class="border border-alert/40 bg-alert/10 rounded-plate p-4 text-sm text-alert mb-4">{{ error() }}</div>
+      <div class="note note-alert p-4 mb-4">{{ error() }}</div>
     }
     @if (saved()) {
-      <div class="border border-stock/40 bg-stock/10 rounded-plate p-3 text-sm text-stock mb-4">{{ saved() }}</div>
+      <div class="note note-stock p-3 mb-4">{{ saved() }}</div>
     }
 
     @if (loading()) {
-      <div class="border border-ink-line rounded-plate bg-ink-panel h-40 animate-pulse"></div>
+      <div class="panel h-40 animate-pulse"></div>
     } @else {
       <div class="border border-ink-line rounded-plate overflow-x-auto">
         <table class="w-full text-sm min-w-[760px]">

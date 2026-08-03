@@ -12,11 +12,11 @@ import type { ClientCategory } from '../core/admin.models';
     </p>
 
     @if (error()) {
-      <div class="border border-alert/40 bg-alert/10 rounded-plate p-4 text-sm text-alert mb-4">{{ error() }}</div>
+      <div class="note note-alert p-4 mb-4">{{ error() }}</div>
     }
 
     @if (loading()) {
-      <div class="border border-ink-line rounded-plate bg-ink-panel h-40 animate-pulse mb-8"></div>
+      <div class="panel h-40 animate-pulse mb-8"></div>
     } @else {
       <div class="border border-ink-line rounded-plate overflow-x-auto mb-8">
         <table class="w-full text-sm min-w-[640px]">
@@ -52,35 +52,35 @@ import type { ClientCategory } from '../core/admin.models';
       </div>
     }
 
-    <div class="border border-ink-line rounded-plate bg-ink-panel p-6 max-w-xl">
+    <div class="panel p-6 max-w-xl">
       <h2 class="font-display font-semibold mb-4">Add category</h2>
       <form class="grid grid-cols-2 gap-4" (submit)="create($event)">
         <label class="grid gap-1 text-xs text-mute col-span-2">
           Name
           <input required placeholder="e.g. Price 11"
                  [value]="name()" (input)="name.set($any($event.target).value)"
-                 class="bg-ink border border-ink-line rounded-plate px-3 py-2 text-sm text-paper" />
+                 class="field" />
         </label>
         <label class="grid gap-1 text-xs text-mute">
           Markup %
           <input type="number" step="0.01" required
                  [value]="markupPercent()" (input)="markupPercent.set($any($event.target).value)"
-                 class="bg-ink border border-ink-line rounded-plate px-3 py-2 text-sm text-paper" />
+                 class="field" />
         </label>
         <label class="grid gap-1 text-xs text-mute">
           Min. order (€)
           <input type="number" step="0.01"
                  [value]="minOrderAmount()" (input)="minOrderAmount.set($any($event.target).value)"
-                 class="bg-ink border border-ink-line rounded-plate px-3 py-2 text-sm text-paper" />
+                 class="field" />
         </label>
         <label class="grid gap-1 text-xs text-mute">
           Shelf life (days)
           <input type="number"
                  [value]="shelfLifeDays()" (input)="shelfLifeDays.set($any($event.target).value)"
-                 class="bg-ink border border-ink-line rounded-plate px-3 py-2 text-sm text-paper" />
+                 class="field" />
         </label>
         <button type="submit" [disabled]="creating()"
-                class="col-span-2 mt-2 bg-signal hover:bg-signal-dim disabled:opacity-60 text-ink font-display font-bold py-2.5 rounded-plate transition-colors">
+                class="col-span-2 mt-2 btn-primary py-2.5">
           {{ creating() ? 'Adding…' : 'Add category' }}
         </button>
       </form>

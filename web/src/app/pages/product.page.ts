@@ -12,12 +12,12 @@ import type { ProductResponse } from '../core/api.models';
     @if (error()) {
       <div class="max-w-5xl mx-auto px-6 py-16 text-center">
         <p class="text-mute text-sm">{{ error() }}</p>
-        <a routerLink="/" class="inline-block mt-4 text-signal hover:underline text-sm">Back to the catalog</a>
+        <a routerLink="/" class="inline-block mt-4 link-signal text-sm">Back to the catalog</a>
       </div>
     } @else if (loading() || !data()) {
       <div class="max-w-5xl mx-auto px-6 py-10 grid md:grid-cols-[1.3fr_1fr] gap-10">
-        <div class="h-64 border border-ink-line rounded-plate bg-ink-panel animate-pulse"></div>
-        <div class="h-64 border border-ink-line rounded-plate bg-ink-panel animate-pulse"></div>
+        <div class="h-64 panel animate-pulse"></div>
+        <div class="h-64 panel animate-pulse"></div>
       </div>
     } @else {
       <div class="max-w-5xl mx-auto px-6 py-10 grid md:grid-cols-[1.3fr_1fr] gap-10">
@@ -58,7 +58,7 @@ import type { ProductResponse } from '../core/api.models';
           </div>
         </div>
 
-        <aside class="border border-ink-line rounded-plate bg-ink-panel p-6 h-fit sticky top-24">
+        <aside class="panel p-6 h-fit sticky top-24">
           <p class="text-xs text-mute uppercase tracking-widest mb-1">
             {{ data()!.isLoggedIn ? 'Your price (' + data()!.tierName + ')' : 'Price (Retail)' }}
           </p>
@@ -68,7 +68,7 @@ import type { ProductResponse } from '../core/api.models';
           }
           @if (!data()!.isLoggedIn) {
             <p class="text-[11px] text-mute mt-1">
-              <a routerLink="/login" class="text-signal hover:underline">Sign in</a> to see your account's price.
+              <a routerLink="/login" class="link-signal">Sign in</a> to see your account's price.
             </p>
           }
 
@@ -82,14 +82,14 @@ import type { ProductResponse } from '../core/api.models';
           </div>
 
           <button type="button" (click)="addToCart()"
-                  class="w-full mt-6 bg-signal hover:bg-signal-dim text-ink font-display font-bold py-3 rounded-plate transition-colors">
+                  class="w-full mt-6 btn-primary py-3">
             {{ added() ? 'Added to cart' : 'Add to cart' }}
           </button>
 
           @if (product().supplier; as supplier) {
             <p class="text-[11px] text-mute mt-4 flex flex-wrap items-baseline gap-1.5">
               <span>Supplied by</span>
-              <a [routerLink]="['/supplier', supplier.slug]" class="text-signal hover:underline">
+              <a [routerLink]="['/supplier', supplier.slug]" class="link-signal">
                 {{ supplier.name }}
               </a>
               <app-supplier-rating [rating]="supplier.rating" [name]="supplier.name" [showUnrated]="false" />

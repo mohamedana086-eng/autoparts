@@ -50,11 +50,11 @@ const HEADER_WORDS = /^(part|item|code|ref|reference|number|no\.?|sku|oe|oem|art
       </p>
 
       @if (error()) {
-        <div class="border border-alert/40 bg-alert/10 rounded-plate p-3 text-sm text-alert mb-4">{{ error() }}</div>
+        <div class="note note-alert p-3 mb-4">{{ error() }}</div>
       }
 
       <div class="grid md:grid-cols-2 gap-4 mb-8">
-        <div class="border border-ink-line rounded-plate bg-ink-panel p-5">
+        <div class="panel p-5">
           <h2 class="font-display font-semibold text-sm mb-1">Upload a file</h2>
           <p class="text-xs text-mute mb-4">.xlsx or .csv — part numbers in the first column.</p>
           <input type="file" accept=".xlsx,.xls,.csv" (change)="onFile($event)"
@@ -67,22 +67,22 @@ const HEADER_WORDS = /^(part|item|code|ref|reference|number|no\.?|sku|oe|oem|art
           }
         </div>
 
-        <div class="border border-ink-line rounded-plate bg-ink-panel p-5">
+        <div class="panel p-5">
           <h2 class="font-display font-semibold text-sm mb-1">Or paste them</h2>
           <p class="text-xs text-mute mb-4">One per line.</p>
           <textarea rows="4" [value]="pasted()" (input)="pasted.set($any($event.target).value)"
                     aria-label="Paste part numbers"
                     placeholder="0 986 424 815&#10;09.9772.11&#10;W 712/75"
-                    class="w-full bg-ink border border-ink-line rounded-plate px-3 py-2 text-sm text-paper font-mono"></textarea>
+                    class="w-full field font-mono"></textarea>
           <button type="button" (click)="checkPasted()" [disabled]="busy()"
-                  class="mt-3 bg-signal hover:bg-signal-dim disabled:opacity-60 text-ink font-display font-bold text-sm px-4 py-2 rounded-plate transition-colors">
+                  class="mt-3 btn-primary text-sm px-4 py-2">
             {{ busy() ? 'Checking…' : 'Check list' }}
           </button>
         </div>
       </div>
 
       @if (result(); as res) {
-        <div class="border border-ink-line rounded-plate bg-ink-panel p-5 mb-4 flex flex-wrap items-center gap-x-8 gap-y-2">
+        <div class="panel p-5 mb-4 flex flex-wrap items-center gap-x-8 gap-y-2">
           <p class="text-sm">
             <span class="font-mono text-stock font-bold">{{ res.foundCount }}</span> of
             <span class="font-mono">{{ res.submitted }}</span> in stock
@@ -96,7 +96,7 @@ const HEADER_WORDS = /^(part|item|code|ref|reference|number|no\.?|sku|oe|oem|art
           </p>
           @if (res.foundCount > 0) {
             <button type="button" (click)="addAll()"
-                    class="ml-auto bg-signal hover:bg-signal-dim text-ink font-display font-bold text-sm px-4 py-2 rounded-plate transition-colors">
+                    class="ml-auto btn-primary text-sm px-4 py-2">
               {{ added() ? 'Added to cart' : 'Add all ' + res.foundCount + ' to cart' }}
             </button>
           }
@@ -110,7 +110,7 @@ const HEADER_WORDS = /^(part|item|code|ref|reference|number|no\.?|sku|oe|oem|art
 
         @if (!res.isLoggedIn) {
           <p class="text-xs text-mute mb-4">
-            Prices are Retail — <a routerLink="/login" class="text-signal hover:underline">sign in</a>
+            Prices are Retail — <a routerLink="/login" class="link-signal">sign in</a>
             to price this list on your account.
           </p>
         }
@@ -154,7 +154,7 @@ const HEADER_WORDS = /^(part|item|code|ref|reference|number|no\.?|sku|oe|oem|art
                   <td class="px-4 py-3 text-right">
                     @if (row.found && row.product) {
                       <button type="button" (click)="addOne(row)"
-                              class="text-xs font-mono uppercase text-signal hover:underline"
+                              class="text-xs font-mono uppercase link-signal"
                               [attr.aria-label]="'Add ' + row.product.partNumber + ' to cart'">Add</button>
                     }
                   </td>

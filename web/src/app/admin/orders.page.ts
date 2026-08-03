@@ -19,9 +19,9 @@ const STATUS_STYLE: Record<string, string> = {
     </p>
 
     @if (error()) {
-      <div class="border border-alert/40 bg-alert/10 rounded-plate p-4 text-sm text-alert">{{ error() }}</div>
+      <div class="note note-alert p-4">{{ error() }}</div>
     } @else if (loading()) {
-      <div class="border border-ink-line rounded-plate bg-ink-panel h-32 animate-pulse"></div>
+      <div class="panel h-32 animate-pulse"></div>
     } @else if (orders().length === 0) {
       <div class="border border-dashed border-ink-line rounded-plate p-10 text-center text-mute text-sm">
         No orders yet. They appear here as soon as a signed-in customer places one.

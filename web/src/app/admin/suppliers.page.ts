@@ -34,15 +34,15 @@ const RELIABILITY_STYLE: Record<string, string> = {
     </p>
 
     @if (error()) {
-      <div class="border border-alert/40 bg-alert/10 rounded-plate p-3 text-sm text-alert mb-4">{{ error() }}</div>
+      <div class="note note-alert p-3 mb-4">{{ error() }}</div>
     }
     @if (notice()) {
-      <div class="border border-stock/40 bg-stock/10 rounded-plate p-3 text-sm text-stock mb-4">{{ notice() }}</div>
+      <div class="note note-stock p-3 mb-4">{{ notice() }}</div>
     }
 
     <div class="flex mb-4">
       <button type="button" (click)="startCreate()"
-              class="ml-auto bg-signal hover:bg-signal-dim text-ink font-display font-bold text-sm px-4 py-2 rounded-plate transition-colors">
+              class="ml-auto btn-primary text-sm px-4 py-2">
         Add supplier
       </button>
     </div>
@@ -56,32 +56,32 @@ const RELIABILITY_STYLE: Record<string, string> = {
           <label class="grid gap-1 text-xs text-mute md:col-span-2">
             Name
             <input required [value]="form().name" (input)="patch('name', $any($event.target).value)"
-                   class="bg-ink border border-ink-line rounded-plate px-3 py-2 text-sm text-paper" />
+                   class="field" />
           </label>
           <label class="grid gap-1 text-xs text-mute">
             Code
             <input required placeholder="e.g. IB16" [value]="form().code"
                    (input)="patch('code', $any($event.target).value)"
-                   class="bg-ink border border-ink-line rounded-plate px-3 py-2 text-sm text-paper font-mono uppercase" />
+                   class="field font-mono uppercase" />
           </label>
 
           <label class="grid gap-1 text-xs text-mute md:col-span-3">
             Description
             <input [value]="form().description" (input)="patch('description', $any($event.target).value)"
-                   class="bg-ink border border-ink-line rounded-plate px-3 py-2 text-sm text-paper" />
+                   class="field" />
           </label>
 
           <label class="grid gap-1 text-xs text-mute">
             Page url
             <input placeholder="made from the name if left blank" [value]="form().slug"
                    (input)="patch('slug', $any($event.target).value)"
-                   class="bg-ink border border-ink-line rounded-plate px-3 py-2 text-sm text-paper font-mono" />
+                   class="field font-mono" />
           </label>
 
           <label class="grid gap-1 text-xs text-mute">
             Reliability
             <select [value]="form().reliability" (change)="patch('reliability', $any($event.target).value)"
-                    class="bg-ink border border-ink-line rounded-plate px-3 py-2 text-sm text-paper">
+                    class="field">
               @for (r of reliabilities; track r) {
                 <option [value]="r" [selected]="form().reliability === r">{{ r }}</option>
               }
@@ -92,7 +92,7 @@ const RELIABILITY_STYLE: Record<string, string> = {
             Returns accepted
             <select [value]="returnsValue(form().acceptsReturns)"
                     (change)="patchReturns($any($event.target).value)"
-                    class="bg-ink border border-ink-line rounded-plate px-3 py-2 text-sm text-paper">
+                    class="field">
               <option value="">Not established</option>
               <option value="true">Yes</option>
               <option value="false">No</option>
@@ -122,7 +122,7 @@ const RELIABILITY_STYLE: Record<string, string> = {
 
           <div class="md:col-span-3 flex gap-3 mt-1">
             <button type="submit" [disabled]="saving()"
-                    class="bg-signal hover:bg-signal-dim disabled:opacity-60 text-ink font-display font-bold text-sm px-5 py-2 rounded-plate transition-colors">
+                    class="btn-primary text-sm px-5 py-2">
               {{ saving() ? 'Saving…' : 'Save' }}
             </button>
             <button type="button" (click)="cancel()"
@@ -133,7 +133,7 @@ const RELIABILITY_STYLE: Record<string, string> = {
     }
 
     @if (loading()) {
-      <div class="border border-ink-line rounded-plate bg-ink-panel h-40 animate-pulse"></div>
+      <div class="panel h-40 animate-pulse"></div>
     } @else {
       <div class="border border-ink-line rounded-plate overflow-x-auto">
         <table class="w-full text-sm min-w-[760px]">

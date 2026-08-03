@@ -22,10 +22,10 @@ const BLANK: ProductInput = {
     </p>
 
     @if (error()) {
-      <div class="border border-alert/40 bg-alert/10 rounded-plate p-3 text-sm text-alert mb-4">{{ error() }}</div>
+      <div class="note note-alert p-3 mb-4">{{ error() }}</div>
     }
     @if (notice()) {
-      <div class="border border-stock/40 bg-stock/10 rounded-plate p-3 text-sm text-stock mb-4">{{ notice() }}</div>
+      <div class="note note-stock p-3 mb-4">{{ notice() }}</div>
     }
 
     <div class="flex flex-wrap items-center gap-3 mb-4">
@@ -38,7 +38,7 @@ const BLANK: ProductInput = {
         Filter
       </button>
       <button type="button" (click)="startCreate()"
-              class="ml-auto bg-signal hover:bg-signal-dim text-ink font-display font-bold text-sm px-4 py-2 rounded-plate transition-colors">
+              class="ml-auto btn-primary text-sm px-4 py-2">
         Add product
       </button>
     </div>
@@ -52,24 +52,24 @@ const BLANK: ProductInput = {
           <label class="grid gap-1 text-xs text-mute">
             Part number
             <input required [value]="form().partNumber" (input)="patch('partNumber', $any($event.target).value)"
-                   class="bg-ink border border-ink-line rounded-plate px-3 py-2 text-sm text-paper font-mono" />
+                   class="field font-mono" />
           </label>
           <label class="grid gap-1 text-xs text-mute md:col-span-2">
             Name
             <input required [value]="form().name" (input)="patch('name', $any($event.target).value)"
-                   class="bg-ink border border-ink-line rounded-plate px-3 py-2 text-sm text-paper" />
+                   class="field" />
           </label>
 
           <label class="grid gap-1 text-xs text-mute md:col-span-3">
             Description
             <input [value]="form().description" (input)="patch('description', $any($event.target).value)"
-                   class="bg-ink border border-ink-line rounded-plate px-3 py-2 text-sm text-paper" />
+                   class="field" />
           </label>
 
           <label class="grid gap-1 text-xs text-mute">
             Manufacturer
             <select [value]="form().manufacturerId" (change)="patch('manufacturerId', $any($event.target).value)"
-                    class="bg-ink border border-ink-line rounded-plate px-3 py-2 text-sm text-paper">
+                    class="field">
               <option value="">— pick one —</option>
               @for (m of manufacturers(); track m.id) {
                 <option [value]="m.id" [selected]="form().manufacturerId === m.id">{{ m.name }}</option>
@@ -79,7 +79,7 @@ const BLANK: ProductInput = {
           <label class="grid gap-1 text-xs text-mute">
             Vehicle system
             <select [value]="form().vehicleSystemId" (change)="patch('vehicleSystemId', $any($event.target).value)"
-                    class="bg-ink border border-ink-line rounded-plate px-3 py-2 text-sm text-paper">
+                    class="field">
               <option value="">— pick one —</option>
               @for (s of systems(); track s.id) {
                 <option [value]="s.id" [selected]="form().vehicleSystemId === s.id">{{ s.name }}</option>
@@ -91,19 +91,19 @@ const BLANK: ProductInput = {
               Purchase price (€)
               <input type="number" step="0.01" min="0" required [value]="form().basePrice"
                      (input)="patchNumber('basePrice', $any($event.target).value)"
-                     class="bg-ink border border-ink-line rounded-plate px-3 py-2 text-sm text-paper font-mono" />
+                     class="field font-mono" />
             </label>
             <label class="grid gap-1 text-xs text-mute">
               Delivery (days)
               <input type="number" min="0" step="1" required [value]="form().stockDays"
                      (input)="patchNumber('stockDays', $any($event.target).value)"
-                     class="bg-ink border border-ink-line rounded-plate px-3 py-2 text-sm text-paper font-mono" />
+                     class="field font-mono" />
             </label>
           </div>
 
           <div class="md:col-span-3 flex items-center gap-3 mt-1">
             <button type="submit" [disabled]="saving()"
-                    class="bg-signal hover:bg-signal-dim disabled:opacity-60 text-ink font-display font-bold py-2.5 px-6 rounded-plate transition-colors">
+                    class="btn-primary py-2.5 px-6">
               {{ saving() ? 'Saving…' : editingId() ? 'Save changes' : 'Create product' }}
             </button>
             <button type="button" (click)="cancel()"
@@ -114,7 +114,7 @@ const BLANK: ProductInput = {
     }
 
     @if (loading()) {
-      <div class="border border-ink-line rounded-plate bg-ink-panel h-40 animate-pulse"></div>
+      <div class="panel h-40 animate-pulse"></div>
     } @else {
       <div class="border border-ink-line rounded-plate overflow-x-auto">
         <table class="w-full text-sm min-w-[820px]">
@@ -142,7 +142,7 @@ const BLANK: ProductInput = {
                 <td class="px-4 py-3 font-mono text-xs text-mute">{{ p.interchangeCount }}</td>
                 <td class="px-4 py-3 text-right whitespace-nowrap">
                   <button type="button" (click)="startEdit(p)"
-                          class="text-xs font-mono uppercase text-signal hover:underline mr-3"
+                          class="text-xs font-mono uppercase link-signal mr-3"
                           [attr.aria-label]="'Edit ' + p.partNumber">Edit</button>
                   <button type="button" (click)="remove(p)" [disabled]="deletingId() === p.id"
                           class="text-xs font-mono uppercase text-mute hover:text-alert disabled:opacity-50 transition-colors"

@@ -29,13 +29,13 @@ import { AuthService } from '../core/auth.service';
         </label>
 
         <button type="submit" [disabled]="pending()"
-                class="w-full bg-signal hover:bg-signal-dim disabled:opacity-60 text-ink font-display font-bold py-2.5 rounded-plate transition-colors">
+                class="w-full btn-primary py-2.5">
           {{ pending() ? 'Signing in…' : 'Sign in' }}
         </button>
       </form>
 
       <p class="text-xs text-mute mt-6 text-center">
-        No account yet? <a routerLink="/register" class="text-signal hover:underline">Create one</a>
+        No account yet? <a routerLink="/register" class="link-signal">Create one</a>
       </p>
     </div>
   `,

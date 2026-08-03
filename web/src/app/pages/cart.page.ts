@@ -27,7 +27,7 @@ import { OrdersService, type PlacedOrder } from '../core/orders.service';
           </p>
           <p class="text-xs text-mute mt-2">
             We will confirm availability and come back to you.
-            <a routerLink="/orders" class="text-signal hover:underline">See your orders</a>.
+            <a routerLink="/orders" class="link-signal">See your orders</a>.
           </p>
         </div>
       }
@@ -36,13 +36,13 @@ import { OrdersService, type PlacedOrder } from '../core/orders.service';
         @if (!placed()) {
           <div class="border border-dashed border-ink-line rounded-plate p-12 text-center">
             <p class="text-mute text-sm">Your cart is empty.</p>
-            <a routerLink="/" class="inline-block mt-4 text-signal hover:underline text-sm">Browse the catalog</a>
+            <a routerLink="/" class="inline-block mt-4 link-signal text-sm">Browse the catalog</a>
           </div>
         }
       } @else {
         <div class="grid gap-3">
           @for (item of cart.items(); track item.id) {
-            <div class="border border-ink-line rounded-plate bg-ink-panel p-4 grid grid-cols-1 sm:grid-cols-[auto_1fr_auto] gap-4 items-center">
+            <div class="panel p-4 grid grid-cols-1 sm:grid-cols-[auto_1fr_auto] gap-4 items-center">
               <a [routerLink]="['/product', item.id]" class="plate relative rounded-plate px-4 py-2 w-fit">
                 <p class="text-[9px] text-mute uppercase tracking-wider">{{ item.manufacturer }}</p>
                 <p class="font-mono font-semibold text-sm">{{ item.partNumber }}</p>
@@ -81,7 +81,7 @@ import { OrdersService, type PlacedOrder } from '../core/orders.service';
           }
         </div>
 
-        <div class="border border-ink-line rounded-plate bg-ink-panel mt-6 p-5">
+        <div class="panel mt-6 p-5">
           <div class="flex items-baseline justify-between">
             <span class="font-display font-semibold">Total</span>
             <span class="font-mono text-2xl font-bold text-signal">€{{ cart.total().toFixed(2) }}</span>
@@ -99,19 +99,19 @@ import { OrdersService, type PlacedOrder } from '../core/orders.service';
 
           @if (auth.isLoggedIn()) {
             <button type="button" (click)="placeOrder()" [disabled]="placing()"
-                    class="w-full mt-4 bg-signal hover:bg-signal-dim disabled:opacity-60 text-ink font-display font-bold py-3 rounded-plate transition-colors">
+                    class="w-full mt-4 btn-primary py-3">
               {{ placing() ? 'Placing order…' : 'Place order' }}
             </button>
           } @else {
             <p class="text-sm text-mute mt-4">
-              <a routerLink="/login" class="text-signal hover:underline">Sign in</a>
+              <a routerLink="/login" class="link-signal">Sign in</a>
               to place this order — your cart is kept.
             </p>
           }
         </div>
 
         <div class="flex items-center justify-between mt-6">
-          <a routerLink="/" class="text-sm text-signal hover:underline">Continue shopping</a>
+          <a routerLink="/" class="text-sm link-signal">Continue shopping</a>
           <button type="button" (click)="cart.clear()"
                   class="text-xs text-mute hover:text-alert transition-colors">Clear cart</button>
         </div>

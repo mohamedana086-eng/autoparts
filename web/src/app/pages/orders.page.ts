@@ -23,26 +23,26 @@ const STATUS_STYLE: Record<string, string> = {
       @if (!auth.isLoggedIn() && auth.loaded()) {
         <div class="border border-dashed border-ink-line rounded-plate p-12 text-center">
           <p class="text-mute text-sm">
-            <a routerLink="/login" class="text-signal hover:underline">Sign in</a> to see your orders.
+            <a routerLink="/login" class="link-signal">Sign in</a> to see your orders.
           </p>
         </div>
       } @else if (error()) {
-        <div class="border border-alert/40 bg-alert/10 rounded-plate p-4 text-sm text-alert">{{ error() }}</div>
+        <div class="note note-alert p-4">{{ error() }}</div>
       } @else if (loading()) {
         <div class="grid gap-3">
           @for (n of [0, 1]; track n) {
-            <div class="border border-ink-line rounded-plate bg-ink-panel h-28 animate-pulse"></div>
+            <div class="panel h-28 animate-pulse"></div>
           }
         </div>
       } @else if (orders().length === 0) {
         <div class="border border-dashed border-ink-line rounded-plate p-12 text-center">
           <p class="text-mute text-sm">No orders yet.</p>
-          <a routerLink="/" class="inline-block mt-4 text-signal hover:underline text-sm">Browse the catalog</a>
+          <a routerLink="/" class="inline-block mt-4 link-signal text-sm">Browse the catalog</a>
         </div>
       } @else {
         <div class="grid gap-4">
           @for (o of orders(); track o.id) {
-            <div class="border border-ink-line rounded-plate bg-ink-panel p-5">
+            <div class="panel p-5">
               <div class="flex flex-wrap items-baseline justify-between gap-2 mb-3">
                 <div>
                   <p class="font-mono font-semibold">{{ o.reference }}</p>

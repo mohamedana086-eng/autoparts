@@ -7,7 +7,7 @@ import {
 @Component({
   selector: 'app-vehicle-picker',
   template: `
-    <div class="border border-ink-line rounded-plate bg-ink-panel p-5">
+    <div class="panel p-5">
       <div class="flex items-center gap-4 mb-4">
         <h2 class="font-display font-semibold text-sm">Find parts for your car</h2>
         <div class="ml-auto flex text-xs">
@@ -25,7 +25,7 @@ import {
           <label class="grid gap-1 text-xs text-mute">
             Make
             <select [value]="makeId()" (change)="pickMake($any($event.target).value)"
-                    class="bg-ink border border-ink-line rounded-plate px-3 py-2 text-sm text-paper">
+                    class="field">
               <option value="">— select —</option>
               @for (m of makes(); track m.id) {
                 <option [value]="m.id">{{ m.name }}</option>
@@ -37,7 +37,7 @@ import {
             Model
             <select [value]="modelId()" (change)="pickModel($any($event.target).value)"
                     [disabled]="!makeId()"
-                    class="bg-ink border border-ink-line rounded-plate px-3 py-2 text-sm text-paper disabled:opacity-50">
+                    class="field disabled:opacity-50">
               <option value="">— select —</option>
               @for (m of models(); track m.id) {
                 <option [value]="m.id">{{ m.name }} ({{ m.yearFrom }}–{{ m.yearTo ?? 'now' }})</option>
@@ -49,7 +49,7 @@ import {
             Engine
             <select [value]="variantId()" (change)="pickVariant($any($event.target).value)"
                     [disabled]="!modelId()"
-                    class="bg-ink border border-ink-line rounded-plate px-3 py-2 text-sm text-paper disabled:opacity-50">
+                    class="field disabled:opacity-50">
               <option value="">— select —</option>
               @for (v of variants(); track v.id) {
                 <option [value]="v.id">
@@ -61,7 +61,7 @@ import {
         </div>
 
         <button type="button" (click)="showParts(variantId())" [disabled]="!variantId()"
-                class="w-full sm:w-auto mt-4 bg-signal hover:bg-signal-dim disabled:opacity-50 text-ink font-display font-bold text-sm px-6 py-2.5 rounded-plate transition-colors">
+                class="w-full sm:w-auto mt-4 btn-primary text-sm px-6 py-2.5">
           Show parts
         </button>
       } @else {
@@ -69,9 +69,9 @@ import {
           <input [value]="vin()" (input)="vin.set($any($event.target).value)"
                  placeholder="e.g. WBA3A5C50DF123456" aria-label="Chassis number (VIN)"
                  maxlength="17" autocomplete="off"
-                 class="flex-1 min-w-[16rem] bg-ink border border-ink-line rounded-plate px-3 py-2 text-sm text-paper font-mono uppercase" />
+                 class="flex-1 min-w-[16rem] field font-mono uppercase" />
           <button type="submit" [disabled]="decoding()"
-                  class="bg-signal hover:bg-signal-dim disabled:opacity-60 text-ink font-display font-bold text-sm px-6 py-2 rounded-plate transition-colors">
+                  class="btn-primary text-sm px-6 py-2">
             {{ decoding() ? 'Reading…' : 'Read VIN' }}
           </button>
         </form>
