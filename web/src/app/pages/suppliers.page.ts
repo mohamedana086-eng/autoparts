@@ -1,6 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { SuppliersService, type SupplierSummary } from '../core/suppliers.service';
+import { SupplierRating } from '../core/supplier-rating';
 
 const RELIABILITY_STYLE: Record<string, string> = {
   official: 'border-stock text-stock',
@@ -10,7 +11,7 @@ const RELIABILITY_STYLE: Record<string, string> = {
 
 @Component({
   selector: 'app-suppliers',
-  imports: [RouterLink],
+  imports: [RouterLink, SupplierRating],
   template: `
     <div class="max-w-5xl mx-auto px-6 py-10">
       <h1 class="font-display text-2xl font-bold mb-1">Suppliers</h1>
@@ -36,14 +37,7 @@ const RELIABILITY_STYLE: Record<string, string> = {
                 <span class="font-display font-bold">{{ s.name }}</span>
                 <span class="font-mono text-[10px] uppercase px-2 py-0.5 rounded-plate border"
                       [class]="badge(s.reliability)">{{ s.reliability }}</span>
-                @if (s.rating; as rating) {
-                  <span class="text-xs" [attr.aria-label]="'Rated ' + rating + ' out of 5'">
-                    <span class="text-signal" aria-hidden="true">{{ stars(rating) }}</span><span
-                          class="text-ink-line" aria-hidden="true">{{ stars(5 - rating) }}</span>
-                  </span>
-                } @else {
-                  <span class="text-[11px] text-mute">Unrated</span>
-                }
+                <app-supplier-rating class="text-xs" [rating]="s.rating" [name]="s.name" />
                 <span class="ml-auto text-xs text-mute font-mono">{{ s.productCount }} parts</span>
               </div>
               @if (s.description) {
@@ -78,9 +72,5 @@ export class SuppliersPage {
 
   protected badge(reliability: string): string {
     return RELIABILITY_STYLE[reliability] ?? RELIABILITY_STYLE['standard'];
-  }
-
-  protected stars(count: number): string {
-    return '★'.repeat(Math.max(0, count));
   }
 }

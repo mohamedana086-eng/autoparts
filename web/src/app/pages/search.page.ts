@@ -1,6 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { CatalogService } from '../core/catalog.service';
+import { SupplierRating } from '../core/supplier-rating';
 import type { SearchResponse, SearchSort } from '../core/api.models';
 
 const SORT_LABELS: Array<{ value: SearchSort; label: string }> = [
@@ -12,7 +13,7 @@ const SORT_LABELS: Array<{ value: SearchSort; label: string }> = [
 
 @Component({
   selector: 'app-search',
-  imports: [RouterLink],
+  imports: [RouterLink, SupplierRating],
   template: `
     <div class="max-w-7xl mx-auto px-6 py-10">
       <div class="flex items-baseline justify-between mb-1">
@@ -198,12 +199,12 @@ const SORT_LABELS: Array<{ value: SearchSort; label: string }> = [
                 <div class="flex flex-wrap items-center gap-3 mt-2 text-xs text-mute">
                   <span>{{ p.stockDays }} day{{ p.stockDays === 1 ? '' : 's' }} delivery</span>
                   <span class="text-stock">In stock</span>
-                  @if (p.supplier?.rating; as rating) {
-                    <span class="flex items-center gap-1"
-                          [attr.title]="p.supplier!.name + ' rated ' + rating + ' out of 5'">
-                      <span class="text-signal" aria-hidden="true">{{ filledStars(rating) }}</span>
-                      <span class="sr-only">{{ p.supplier!.name }} rated {{ rating }} out of 5</span>
-                    </span>
+                  @if (p.supplier; as supplier) {
+                    <app-supplier-rating
+                      [rating]="supplier.rating"
+                      [name]="supplier.name"
+                      [showUnrated]="false"
+                      [attr.title]="supplier.name + (supplier.rating ? ' rated ' + supplier.rating + ' out of 5' : '')" />
                   }
                 </div>
               </div>
@@ -355,10 +356,6 @@ export class SearchPage {
 
   protected setMinRating(min: number | null): void {
     this.merge({ minRating: min === null ? null : String(min) });
-  }
-
-  protected filledStars(rating: number): string {
-    return '★'.repeat(rating);
   }
 
   protected applyPrice(): void {

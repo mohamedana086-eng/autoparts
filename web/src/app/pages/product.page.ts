@@ -2,11 +2,12 @@ import { Component, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { CatalogService } from '../core/catalog.service';
 import { CartService } from '../core/cart.service';
+import { SupplierRating } from '../core/supplier-rating';
 import type { ProductResponse } from '../core/api.models';
 
 @Component({
   selector: 'app-product',
-  imports: [RouterLink],
+  imports: [RouterLink, SupplierRating],
   template: `
     @if (error()) {
       <div class="max-w-5xl mx-auto px-6 py-16 text-center">
@@ -81,11 +82,12 @@ import type { ProductResponse } from '../core/api.models';
           </button>
 
           @if (product().supplier; as supplier) {
-            <p class="text-[11px] text-mute mt-4">
-              Supplied by
+            <p class="text-[11px] text-mute mt-4 flex flex-wrap items-baseline gap-1.5">
+              <span>Supplied by</span>
               <a [routerLink]="['/supplier', supplier.slug]" class="text-signal hover:underline">
                 {{ supplier.name }}
               </a>
+              <app-supplier-rating [rating]="supplier.rating" [name]="supplier.name" [showUnrated]="false" />
             </p>
           }
 
