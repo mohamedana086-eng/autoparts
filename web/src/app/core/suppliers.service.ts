@@ -8,7 +8,10 @@ export interface SupplierSummary {
   slug: string;
   name: string;
   description: string | null;
+  /** What the trading relationship is: official / reliable / standard. */
   reliability: string;
+  /** How well they perform, 1–5, or null when nobody has rated them yet. */
+  rating: number | null;
   productCount: number;
 }
 

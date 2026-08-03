@@ -2,8 +2,8 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import type {
-  AdminClient, AdminOrder, AdminProduct, AdminStats, ClientCategory, MarkupRule,
-  MarkupRulesResponse, ProductInput, ProductsResponse, TierRef,
+  AdminClient, AdminOrder, AdminProduct, AdminStats, AdminSupplier, ClientCategory, MarkupRule,
+  MarkupRulesResponse, ProductInput, ProductsResponse, SupplierInput, TierRef,
 } from './admin.models';
 
 /**
@@ -91,5 +91,34 @@ export class AdminService {
 
   deleteProduct(id: string): Promise<{ ok: boolean }> {
     return firstValueFrom(this.http.delete<{ ok: boolean }>(`/api/admin/products/${id}`));
+  }
+
+  suppliers(): Promise<{ suppliers: AdminSupplier[] }> {
+    return firstValueFrom(this.http.get<{ suppliers: AdminSupplier[] }>('/api/admin/suppliers'));
+  }
+
+  createSupplier(input: SupplierInput): Promise<{ supplier: AdminSupplier }> {
+    return firstValueFrom(this.http.post<{ supplier: AdminSupplier }>('/api/admin/suppliers', input));
+  }
+
+  updateSupplier(id: string, input: SupplierInput): Promise<{ supplier: AdminSupplier }> {
+    return firstValueFrom(
+      this.http.patch<{ supplier: AdminSupplier }>(`/api/admin/suppliers/${id}`, input)
+    );
+  }
+
+  /**
+   * Sets only the rating. A body carrying nothing else is what the API reads
+   * as a rating-only edit, so clicking a star cannot disturb the code or the
+   * url the supplier's page lives at.
+   */
+  rateSupplier(id: string, rating: number | null): Promise<{ supplier: AdminSupplier }> {
+    return firstValueFrom(
+      this.http.patch<{ supplier: AdminSupplier }>(`/api/admin/suppliers/${id}`, { rating })
+    );
+  }
+
+  deleteSupplier(id: string): Promise<{ ok: boolean }> {
+    return firstValueFrom(this.http.delete<{ ok: boolean }>(`/api/admin/suppliers/${id}`));
   }
 }

@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { CatalogService } from '../core/catalog.service';
 import type { SearchResponse, SearchSort } from '../core/api.models';
@@ -121,6 +121,33 @@ const SORT_LABELS: Array<{ value: SearchSort; label: string }> = [
         </div>
       }
 
+      @if (ratingThresholds().length > 0) {
+        <div class="flex flex-wrap items-center gap-2 mb-6">
+          <span class="text-[11px] uppercase tracking-wider text-mute mr-1">Supplier rating</span>
+
+          <button type="button" (click)="setMinRating(null)"
+                  class="text-xs px-2.5 py-1 rounded-plate border transition-colors"
+                  [class]="!data()!.minRating ? activeChip : idleChip">
+            Any
+          </button>
+
+          @for (t of ratingThresholds(); track t.min) {
+            <button type="button" (click)="setMinRating(t.min)"
+                    class="text-xs px-2.5 py-1 rounded-plate border transition-colors"
+                    [class]="data()!.minRating === t.min ? activeChip : idleChip">
+              {{ t.min }}★{{ t.min < 5 ? '+' : '' }}
+              <span class="font-mono text-[10px] opacity-70">{{ t.count }}</span>
+            </button>
+          }
+
+          @if (unratedCount() > 0) {
+            <span class="text-[11px] text-mute">
+              {{ unratedCount() }} from suppliers we have not rated
+            </span>
+          }
+        </div>
+      }
+
       @if (data()?.priceRange; as range) {
         <div class="flex flex-wrap items-center gap-2 mb-6 text-[11px] uppercase tracking-wider text-mute">
           <span class="mr-1">Price</span>
@@ -168,9 +195,16 @@ const SORT_LABELS: Array<{ value: SearchSort; label: string }> = [
                   </p>
                 }
 
-                <div class="flex items-center gap-3 mt-2 text-xs text-mute">
+                <div class="flex flex-wrap items-center gap-3 mt-2 text-xs text-mute">
                   <span>{{ p.stockDays }} day{{ p.stockDays === 1 ? '' : 's' }} delivery</span>
                   <span class="text-stock">In stock</span>
+                  @if (p.supplier?.rating; as rating) {
+                    <span class="flex items-center gap-1"
+                          [attr.title]="p.supplier!.name + ' rated ' + rating + ' out of 5'">
+                      <span class="text-signal" aria-hidden="true">{{ filledStars(rating) }}</span>
+                      <span class="sr-only">{{ p.supplier!.name }} rated {{ rating }} out of 5</span>
+                    </span>
+                  }
                 </div>
               </div>
 
@@ -222,6 +256,44 @@ export class SearchPage {
   protected readonly activeChip = 'border-signal bg-signal/10 text-paper';
   protected readonly idleChip = 'border-ink-line text-mute hover:text-paper';
 
+  /**
+   * "4★+", "5★" and what each would leave. The API counts per exact rating,
+   * so a threshold is the sum of everything at or above it.
+   *
+   * Only thresholds that actually narrow the page are offered. With every
+   * supplier rated 3 or better, "1★+" through "4★+" each select the whole
+   * page, and four chips that do nothing are worse than none — so a
+   * threshold is dropped when it matches nothing, when it selects everything
+   * already shown, or when it selects exactly what the stricter threshold
+   * above it did. Of several thresholds selecting the same set, the highest
+   * is kept: it is the strongest claim that is true of it.
+   */
+  protected readonly ratingThresholds = computed(() => {
+    const facets = this.data()?.facets.supplierRatings ?? [];
+    const total = facets.reduce((sum, f) => sum + f.count, 0);
+
+    const out: Array<{ min: number; count: number }> = [];
+    let kept = -1;
+
+    for (let min = 5; min >= 1; min--) {
+      const count = facets
+        .filter((f) => f.rating !== null && f.rating >= min)
+        .reduce((sum, f) => sum + f.count, 0);
+
+      if (count === 0 || count === total || count === kept) continue;
+
+      out.push({ min, count });
+      kept = count;
+    }
+
+    // Ascending reads better on the row: 4★+ 5★.
+    return out.reverse();
+  });
+
+  protected readonly unratedCount = computed(
+    () => this.data()?.facets.supplierRatings.find((f) => f.rating === null)?.count ?? 0
+  );
+
   constructor() {
     // Re-runs whenever any of the query parameters change, so filtering and
     // sorting stay in the URL and survive a reload or a shared link.
@@ -241,6 +313,7 @@ export class SearchPage {
           manufacturer: params.get('manufacturer'),
           variant: params.get('variant'),
           supplier: params.get('supplier'),
+          minRating: params.get('minRating'),
           sort: params.get('sort'),
           minPrice: params.get('minPrice'),
           maxPrice: params.get('maxPrice'),
@@ -278,6 +351,14 @@ export class SearchPage {
 
   protected setSort(sort: string): void {
     this.merge({ sort: sort === 'relevance' ? null : sort });
+  }
+
+  protected setMinRating(min: number | null): void {
+    this.merge({ minRating: min === null ? null : String(min) });
+  }
+
+  protected filledStars(rating: number): string {
+    return '★'.repeat(rating);
   }
 
   protected applyPrice(): void {

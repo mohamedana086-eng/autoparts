@@ -22,6 +22,15 @@ export async function GET(req: NextRequest) {
   const variant = searchParams.get('variant')?.trim() || undefined;
   const supplier = searchParams.get('supplier')?.trim() || undefined;
 
+  // Minimum supplier rating, 1–5. A part whose supplier is unrated, or which
+  // has no supplier at all, falls outside every minimum on purpose: "at least
+  // four stars" is a claim about known performance, and theirs is not known.
+  const requestedMinRating = Number(searchParams.get('minRating'));
+  const minRating =
+    Number.isInteger(requestedMinRating) && requestedMinRating >= 1 && requestedMinRating <= 5
+      ? requestedMinRating
+      : null;
+
   const requestedSort = searchParams.get('sort') as Sort | null;
   const sort: Sort = requestedSort && SORTS.includes(requestedSort) ? requestedSort : 'relevance';
 
@@ -60,7 +69,12 @@ export async function GET(req: NextRequest) {
 
   // Filtered by the query only. System and brand are applied below so their
   // facet counts can be taken before each one narrows the list.
-  const include = { manufacturer: true, vehicleSystem: true, interchanges: true } as const;
+  const include = {
+    manufacturer: true,
+    vehicleSystem: true,
+    interchanges: true,
+    supplier: true,
+  } as const;
 
   // A vehicle narrows the catalogue to what actually fits it, and composes
   // with everything else rather than replacing it.
@@ -134,6 +148,18 @@ export async function GET(req: NextRequest) {
     brandCounts.set(p.manufacturer.name, (brandCounts.get(p.manufacturer.name) ?? 0) + 1);
   }
 
+  // Counted per exact rating rather than per threshold, so the UI can build
+  // whichever thresholds it wants to offer by summing downwards. Key 0 stands
+  // for unrated — parts whose supplier has no rating, or which have no
+  // supplier — kept visible so the gap is obvious rather than silently
+  // dropped. Like the brand facet, this describes the current system and is
+  // not narrowed by the rating filter itself.
+  const ratingCounts = new Map<number, number>();
+  for (const p of inSystem) {
+    const key = p.supplier?.rating ?? 0;
+    ratingCounts.set(key, (ratingCounts.get(key) ?? 0) + 1);
+  }
+
   const needle = normalisePartNumber(q);
   const lower = q.toLowerCase();
   const lowerTokens = tokens.map((t) => t.toLowerCase());
@@ -141,6 +167,7 @@ export async function GET(req: NextRequest) {
 
   const scored = inSystem
     .filter((p) => !manufacturer || p.manufacturer.name.toLowerCase() === manufacturer.toLowerCase())
+    .filter((p) => minRating === null || (p.supplier?.rating ?? 0) >= minRating)
     .map((p, index) => {
       const normalisedPart = normalisePartNumber(p.partNumber);
       const name = p.name.toLowerCase();
@@ -203,6 +230,11 @@ export async function GET(req: NextRequest) {
           stockDays: p.stockDays,
           price: pricing?.finalPrice ?? p.basePrice,
           appliedRule: pricing?.appliedRule ?? null,
+          // Carried on the row so a result can show who it comes from and how
+          // they rate, which is what makes the rating filter legible.
+          supplier: p.supplier
+            ? { slug: p.supplier.slug, name: p.supplier.name, rating: p.supplier.rating }
+            : null,
           matchedOn,
           matchedVia,
         },
@@ -246,6 +278,7 @@ export async function GET(req: NextRequest) {
       : null,
     supplier: supplier ?? null,
     supplierName: supplierRecord?.name ?? null,
+    minRating,
     minPrice,
     maxPrice,
     sort,
@@ -262,6 +295,10 @@ export async function GET(req: NextRequest) {
       manufacturers: [...brandCounts.entries()]
         .map(([name, count]) => ({ name, count }))
         .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
+      /** Per exact supplier rating, best first; `rating: null` is unrated. */
+      supplierRatings: [...ratingCounts.entries()]
+        .map(([rating, count]) => ({ rating: rating === 0 ? null : rating, count }))
+        .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0)),
     },
     products: withinPrice.slice(0, limit).map((s) => s.product),
   });

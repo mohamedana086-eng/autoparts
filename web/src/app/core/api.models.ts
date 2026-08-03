@@ -11,6 +11,13 @@ export type MatchedOn = 'part-number' | 'name' | 'manufacturer' | 'interchange' 
 
 export type SearchSort = 'relevance' | 'price-asc' | 'price-desc' | 'delivery';
 
+export interface SupplierRef {
+  slug: string;
+  name: string;
+  /** 1–5, or null when nobody has rated them yet. */
+  rating: number | null;
+}
+
 export interface ProductSummary {
   id: string;
   partNumber: string;
@@ -21,6 +28,8 @@ export interface ProductSummary {
   stockDays: number;
   price: number;
   appliedRule: string | null;
+  /** Who the part is bought from, and how they rate. Null when unsourced. */
+  supplier?: SupplierRef | null;
   /** Why this row came back, so the UI can explain non-obvious hits. */
   matchedOn?: MatchedOn;
   /** The cross-reference that matched, when matchedOn is 'interchange'. */
@@ -38,6 +47,13 @@ export interface SystemFacet {
   count: number;
 }
 
+/** How many results come from suppliers on exactly this rating. `rating: null`
+ *  is the unrated ones, which no minimum ever includes. */
+export interface SupplierRatingFacet {
+  rating: number | null;
+  count: number;
+}
+
 export interface SearchResponse {
   query: string;
   systemName: string | null;
@@ -47,6 +63,8 @@ export interface SearchResponse {
   variantLabel: string | null;
   supplier: string | null;
   supplierName: string | null;
+  /** Minimum supplier rating in force, or null for no minimum. */
+  minRating: number | null;
   minPrice: number | null;
   maxPrice: number | null;
   sort: SearchSort;
@@ -56,7 +74,11 @@ export interface SearchResponse {
   isLoggedIn: boolean;
   count: number;
   priceRange: { min: number; max: number } | null;
-  facets: { systems: SystemFacet[]; manufacturers: BrandFacet[] };
+  facets: {
+    systems: SystemFacet[];
+    manufacturers: BrandFacet[];
+    supplierRatings: SupplierRatingFacet[];
+  };
   products: ProductSummary[];
 }
 
@@ -70,7 +92,7 @@ export interface Interchange {
 export interface ProductDetail extends ProductSummary {
   description: string | null;
   interchanges: Interchange[];
-  supplier: { slug: string; name: string } | null;
+  supplier: SupplierRef | null;
 }
 
 export interface ProductResponse {

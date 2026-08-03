@@ -98,3 +98,34 @@ export interface ProductsResponse {
   manufacturers: TierRef[];
   systems: TierRef[];
 }
+
+/** What the trading relationship is. Distinct from `rating`, which is how
+ *  well they actually perform. */
+export const RELIABILITIES = ['official', 'reliable', 'standard'] as const;
+
+export type Reliability = (typeof RELIABILITIES)[number];
+
+export const MIN_RATING = 1;
+export const MAX_RATING = 5;
+
+export interface AdminSupplier {
+  id: string;
+  code: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  reliability: string;
+  /** 1–5, or null when nobody has rated them yet. */
+  rating: number | null;
+  productCount: number;
+}
+
+export interface SupplierInput {
+  name: string;
+  code: string;
+  slug: string;
+  description: string;
+  reliability: string;
+  /** Null clears the rating back to unrated. */
+  rating: number | null;
+}

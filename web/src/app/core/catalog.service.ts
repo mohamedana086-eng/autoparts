@@ -18,6 +18,7 @@ export class CatalogService {
     variant?: string | null;
     supplier?: string | null;
     sort?: string | null;
+    minRating?: string | null;
     minPrice?: string | null;
     maxPrice?: string | null;
     limit?: number;
@@ -29,6 +30,7 @@ export class CatalogService {
     if (opts.variant) params = params.set('variant', opts.variant);
     if (opts.supplier) params = params.set('supplier', opts.supplier);
     if (opts.sort && opts.sort !== 'relevance') params = params.set('sort', opts.sort);
+    if (opts.minRating) params = params.set('minRating', opts.minRating);
     if (opts.minPrice) params = params.set('minPrice', opts.minPrice);
     if (opts.maxPrice) params = params.set('maxPrice', opts.maxPrice);
     if (opts.limit) params = params.set('limit', String(opts.limit));

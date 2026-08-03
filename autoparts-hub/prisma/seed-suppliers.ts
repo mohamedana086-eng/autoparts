@@ -17,6 +17,9 @@ interface SupplierSeed {
   slug: string;
   reliability: string;
   description: string;
+  /** Starting performance rating, 1–5. Only applied to unrated suppliers —
+   *  see the upsert below, which never overwrites one set in the admin. */
+  rating: number;
   /** Parts brands this supplier stocks. Drives the assignment below. */
   brands: string[];
 }
@@ -30,6 +33,7 @@ const SUPPLIERS: SupplierSeed[] = [
     description:
       'Official distributor for the German programme — Bosch, Hella, Mahle and Febi. ' +
       'Stock is held locally, so most lines ship the same day.',
+    rating: 5,
     brands: ['BOSCH', 'HELLA', 'MAHLE', 'FEBI BILSTEIN', 'MANN-FILTER'],
   },
   {
@@ -40,6 +44,7 @@ const SUPPLIERS: SupplierSeed[] = [
     description:
       'Braking and chassis specialist carrying Brembo, TRW, ATE and SKF. ' +
       'Deeper range on older platforms than most of the market.',
+    rating: 4,
     brands: ['BREMBO', 'TRW', 'ATE', 'SKF', 'LUK', 'SACHS'],
   },
   {
@@ -50,6 +55,7 @@ const SUPPLIERS: SupplierSeed[] = [
     description:
       'General aftermarket wholesaler — ignition, cooling, lighting and service items ' +
       'from Valeo, Denso, NGK, Gates, Osram and Philips.',
+    rating: 3,
     brands: ['VALEO', 'DENSO', 'NGK', 'GATES', 'OSRAM', 'PHILIPS', 'METALCAUCHO'],
   },
 ];
@@ -59,6 +65,9 @@ const OE_SUPPLIER_CODE = 'IB16';
 
 async function main() {
   for (const s of SUPPLIERS) {
+    // `rating` is deliberately absent from `update`: it is an admin's own
+    // judgement, and re-running the seed must not reset it. It is applied
+    // below only where nobody has set one.
     await prisma.supplier.upsert({
       where: { code: s.code },
       update: {
@@ -73,7 +82,13 @@ async function main() {
         slug: s.slug,
         reliability: s.reliability,
         description: s.description,
+        rating: s.rating,
       },
+    });
+
+    await prisma.supplier.updateMany({
+      where: { code: s.code, rating: null },
+      data: { rating: s.rating },
     });
   }
 
@@ -109,7 +124,10 @@ async function main() {
     include: { _count: { select: { products: true } } },
     orderBy: { code: 'asc' },
   })) {
-    console.log(`  ${s.code.padEnd(6)} ${String(s._count.products).padStart(3)} parts  /${s.slug}`);
+    console.log(
+      `  ${s.code.padEnd(6)} ${String(s._count.products).padStart(3)} parts  ` +
+        `${s.rating === null ? 'unrated' : `${s.rating}/5    `}  /${s.slug}`
+    );
   }
   console.log(`unsourced remaining: ${await prisma.product.count({ where: { supplierId: null } })}`);
 }

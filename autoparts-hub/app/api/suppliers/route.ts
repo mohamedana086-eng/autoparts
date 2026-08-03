@@ -16,6 +16,7 @@ export async function GET() {
       name: s.name,
       description: s.description,
       reliability: s.reliability,
+      rating: s.rating,
       productCount: s._count.products,
     })),
   });

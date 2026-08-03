@@ -31,6 +31,7 @@ export class AdminLayout {
   protected readonly nav = [
     { path: '/admin', label: 'Dashboard', exact: true },
     { path: '/admin/products', label: 'Products', exact: false },
+    { path: '/admin/suppliers', label: 'Suppliers', exact: false },
     { path: '/admin/clients', label: 'Clients', exact: false },
     { path: '/admin/client-categories', label: 'Client categories', exact: false },
     { path: '/admin/markup-rules', label: 'Markup rules', exact: false },

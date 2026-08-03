@@ -35,6 +35,12 @@ model Supplier {
   slug         String        @unique // url for the supplier's own page
   description  String?       // shown on that page
   reliability  String        @default("standard") // official | reliable | standard
+  /// How well they actually perform, 1–5, set by an admin. Distinct from
+  /// `reliability`, which describes the trading relationship: an official
+  /// distributor can still be slow. Null means nobody has rated them yet,
+  /// which is not the same as rating them badly — the search filter treats
+  /// unrated suppliers as excluded rather than as zero.
+  rating       Int?
   products     Product[]
   markupRules  MarkupRule[]
 }

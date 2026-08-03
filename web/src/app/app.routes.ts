@@ -22,6 +22,10 @@ export const routes: Routes = [
       { path: 'products', loadComponent: () => import('./admin/products.page').then((m) => m.AdminProductsPage) },
       { path: 'clients', loadComponent: () => import('./admin/clients.page').then((m) => m.AdminClientsPage) },
       {
+        path: 'suppliers',
+        loadComponent: () => import('./admin/suppliers.page').then((m) => m.AdminSuppliersPage),
+      },
+      {
         path: 'client-categories',
         loadComponent: () => import('./admin/client-categories.page').then((m) => m.AdminClientCategoriesPage),
       },

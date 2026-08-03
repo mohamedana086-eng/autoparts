@@ -31,7 +31,11 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       price: pricing?.finalPrice ?? product.basePrice,
       appliedRule: pricing?.appliedRule ?? null,
       supplier: product.supplier
-        ? { slug: product.supplier.slug, name: product.supplier.name }
+        ? {
+            slug: product.supplier.slug,
+            name: product.supplier.name,
+            rating: product.supplier.rating,
+          }
         : null,
       interchanges: product.interchanges.map((i) => ({
         id: i.id,
