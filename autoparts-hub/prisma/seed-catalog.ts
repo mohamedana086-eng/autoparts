@@ -134,6 +134,30 @@ const PRODUCTS: ProductSeed[] = [
   { partNumber: '05541', name: 'Bonnet gas strut', manufacturer: 'METALCAUCHO', system: 'body', basePrice: 18.95, stockDays: 2 },
 ];
 
+/**
+ * sourcePartNumber -> the vehicle maker's own numbers for the same part.
+ *
+ * Separate from INTERCHANGES below because these answer a different question.
+ * Those are "which other brand's part fits instead"; these are "which number
+ * is printed on the dealer invoice", which is what a customer holding one
+ * searches. They are written with isOEM set, so the search can tell the two
+ * apart without guessing from the brand name.
+ *
+ * Sample data, like the rest of this file — the numbers follow each maker's
+ * format but are not guaranteed to match a real parts catalogue.
+ */
+const OE_REFERENCES: Record<string, Array<[string, string]>> = {
+  'P 06 020': [['34 11 6 794 917', 'BMW']],
+  '0 986 424 815': [['34 11 6 794 917', 'BMW']],
+  'GDB1330': [['34 11 6 794 917', 'BMW']],
+  '09.9772.11': [['34 11 6 855 000', 'BMW']],
+  'W 712/75': [['11 42 7 953 129', 'BMW']],
+  '6418': [['12 12 0 037 244', 'BMW']],
+  'VKBA 3549': [['40210-4M400', 'NISSAN']],
+  'DCP32006': [['88310-05070', 'TOYOTA']],
+  '0 124 525 035': [['37300-2B100', 'HYUNDAI']],
+};
+
 /** sourcePartNumber -> cross references [partNumber, manufacturer, exactMatch] */
 const INTERCHANGES: Record<string, Array<[string, string, boolean]>> = {
   '17138616418': [
@@ -264,6 +288,33 @@ async function main() {
       })),
     });
     interchangesAdded += refs.length;
+  }
+
+  // Checked one at a time rather than skipping a product that already has
+  // cross-references: these were added after the block above, so every seeded
+  // product already has some, and a whole-product guard would never let an OE
+  // number in.
+  for (const [partNumber, refs] of Object.entries(OE_REFERENCES)) {
+    const product = await prisma.product.findUnique({ where: { partNumber } });
+    if (!product) continue;
+
+    for (const [targetPartNo, targetManufacturer] of refs) {
+      const exists = await prisma.interchange.findFirst({
+        where: { sourceId: product.id, targetPartNo },
+      });
+      if (exists) continue;
+
+      await prisma.interchange.create({
+        data: {
+          sourceId: product.id,
+          targetPartNo,
+          targetManufacturer,
+          exactMatch: true,
+          isOEM: true,
+        },
+      });
+      interchangesAdded++;
+    }
   }
 
   const totals = {

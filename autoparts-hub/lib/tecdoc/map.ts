@@ -117,8 +117,16 @@ export function resolveSystemSlug(
 export interface MappedInterchange {
   targetPartNo: string;
   targetManufacturer: string;
-  /** True for OE numbers — the vehicle maker's own, not a competitor's. */
+  /**
+   * Whether the parts are equivalent outright. Both the number types we
+   * import mean that: an OE number identifies the same part, and a
+   * "comparable" number is TecDoc's term for a competitor's equivalent.
+   * Distinct from `isOEM` — an aftermarket brand's exact equivalent is an
+   * exact match and is not OE.
+   */
   exactMatch: boolean;
+  /** Whether it is the vehicle maker's own number. */
+  isOEM: boolean;
 }
 
 export interface MappedProduct {
@@ -192,7 +200,8 @@ function mapInterchanges(
     out.push({
       targetPartNo: entry.articleNumber.trim(),
       targetManufacturer: manufacturer,
-      exactMatch: type === NUMBER_TYPE_OE,
+      exactMatch: true,
+      isOEM: type === NUMBER_TYPE_OE,
     });
   }
 

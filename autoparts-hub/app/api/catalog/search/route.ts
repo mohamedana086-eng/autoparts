@@ -12,7 +12,21 @@ const SORTS: Sort[] = ['relevance', 'price-asc', 'price-desc', 'delivery'];
 const RELIABILITIES = ['official', 'reliable', 'standard'];
 
 /** Why a row came back, so the UI can explain non-obvious hits. */
-type MatchedOn = 'part-number' | 'name' | 'manufacturer' | 'interchange' | 'description';
+type MatchedOn =
+  | 'part-number'
+  | 'name'
+  | 'manufacturer'
+  | 'interchange-oem'
+  | 'interchange-aftermarket'
+  | 'description';
+
+/**
+ * Which kind of number a result was found by. A customer holding a number
+ * off a dealer invoice and one holding a competitor's catalogue are asking
+ * different questions, and until now the answer to both was the same list.
+ */
+type MatchIn = 'part-number' | 'oem' | 'aftermarket';
+const MATCH_INS: MatchIn[] = ['part-number', 'oem', 'aftermarket'];
 
 const MAX_RESULTS = 200;
 
@@ -47,6 +61,12 @@ export async function GET(req: NextRequest) {
   // Only an explicit yes matches. A supplier whose return terms have not been
   // recorded is not evidence that they accept them.
   const returnsOnly = searchParams.get('returns') === 'true';
+
+  // Only meaningful alongside a query — with nothing typed, nothing matched
+  // a number, and the filter would empty the page for no stated reason.
+  const requestedMatchIn = searchParams.get('matchIn') as MatchIn | null;
+  const matchIn: MatchIn | null =
+    q && requestedMatchIn && MATCH_INS.includes(requestedMatchIn) ? requestedMatchIn : null;
 
   const requestedSort = searchParams.get('sort') as Sort | null;
   const sort: Sort = requestedSort && SORTS.includes(requestedSort) ? requestedSort : 'relevance';
@@ -208,9 +228,10 @@ export async function GET(req: NextRequest) {
       const brand = p.manufacturer.name.toLowerCase();
       const description = (p.description ?? '').toLowerCase();
 
-      let rank = 7;
+      let rank = 8;
       let matchedOn: MatchedOn = 'description';
       let matchedVia: string | null = null;
+      let matchedViaManufacturer: string | null = null;
 
       if (fuzzy) {
         // Nothing matched literally, so the only meaningful order is how
@@ -238,15 +259,20 @@ export async function GET(req: NextRequest) {
         rank = 5;
         matchedOn = 'description';
       } else {
-        const cross = p.interchanges.find(
+        const crosses = p.interchanges.filter(
           (i) =>
             i.targetPartNo.toLowerCase().includes(lower) ||
             (!!needle && normalisePartNumber(i.targetPartNo).includes(needle))
         );
+        // The maker's own number wins when both kinds match. Someone typing a
+        // number that is both an OE reference and a competitor's is holding a
+        // dealer invoice far more often than a rival catalogue.
+        const cross = crosses.find((i) => i.isOEM) ?? crosses[0];
         if (cross) {
-          rank = 6;
-          matchedOn = 'interchange';
+          rank = cross.isOEM ? 6 : 7;
+          matchedOn = cross.isOEM ? 'interchange-oem' : 'interchange-aftermarket';
           matchedVia = cross.targetPartNo;
+          matchedViaManufacturer = cross.targetManufacturer;
         }
       }
 
@@ -277,18 +303,42 @@ export async function GET(req: NextRequest) {
             : null,
           matchedOn,
           matchedVia,
+          matchedViaManufacturer,
         },
       };
     });
 
+  // Counted before the match filter narrows anything, so each option can show
+  // what it would leave. A result is counted once, under the number it was
+  // actually found by — the same precedence the scoring above applied.
+  const matchCounts: Record<MatchIn, number> = { 'part-number': 0, oem: 0, aftermarket: 0 };
+  for (const s of scored) {
+    if (s.product.matchedOn === 'part-number') matchCounts['part-number']++;
+    else if (s.product.matchedOn === 'interchange-oem') matchCounts.oem++;
+    else if (s.product.matchedOn === 'interchange-aftermarket') matchCounts.aftermarket++;
+  }
+
+  const byMatch = matchIn
+    ? scored.filter((s) => {
+        switch (matchIn) {
+          case 'part-number':
+            return s.product.matchedOn === 'part-number';
+          case 'oem':
+            return s.product.matchedOn === 'interchange-oem';
+          case 'aftermarket':
+            return s.product.matchedOn === 'interchange-aftermarket';
+        }
+      })
+    : scored;
+
   // Bounds describe what is available before the price filter narrows it, so
   // the UI can show the range the slider or inputs sit in.
-  const prices = scored.map((s) => s.product.price);
+  const prices = byMatch.map((s) => s.product.price);
   const priceRange = prices.length
     ? { min: Math.floor(Math.min(...prices)), max: Math.ceil(Math.max(...prices)) }
     : null;
 
-  const withinPrice = scored.filter(
+  const withinPrice = byMatch.filter(
     (s) =>
       (minPrice === null || s.product.price >= minPrice) &&
       (maxPrice === null || s.product.price <= maxPrice)
@@ -321,6 +371,7 @@ export async function GET(req: NextRequest) {
     minRating,
     reliability: reliability ?? null,
     returns: returnsOnly,
+    matchIn,
     minPrice,
     maxPrice,
     sort,
@@ -349,6 +400,13 @@ export async function GET(req: NextRequest) {
       })).filter((r) => r.count > 0),
       /** How many results come from a supplier known to take stock back. */
       returns: returnsCount,
+      /**
+       * Which kind of number found each result. Only populated alongside a
+       * query — with nothing typed, nothing was found by a number.
+       */
+      matchIn: q
+        ? MATCH_INS.map((name) => ({ name, count: matchCounts[name] })).filter((m) => m.count > 0)
+        : [],
     },
     products: withinPrice.slice(0, limit).map((s) => s.product),
   });

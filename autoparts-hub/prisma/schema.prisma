@@ -84,7 +84,14 @@ model Interchange {
   source         Product  @relation("SourcePart", fields: [sourceId], references: [id])
   targetPartNo   String
   targetManufacturer String
+  /// Whether the two parts are equivalent outright, as opposed to a close
+  /// or partial substitute. Says nothing about who made it — an aftermarket
+  /// brand's part is routinely an exact equivalent.
   exactMatch     Boolean  @default(false)
+  /// Whether this is the vehicle maker's own number, as opposed to another
+  /// brand's. A separate question from `exactMatch`, and the one customers
+  /// searching a number off a dealer invoice are actually asking.
+  isOEM          Boolean  @default(false)
 }
 
 // ---------- Vehicles & fitment ----------

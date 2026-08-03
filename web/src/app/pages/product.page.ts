@@ -41,9 +41,14 @@ import type { ProductResponse } from '../core/api.models';
                   <div class="flex items-center justify-between border border-ink-line rounded-plate px-4 py-2 text-sm">
                     <span class="font-mono">{{ i.partNumber }}</span>
                     <span class="text-mute">{{ i.manufacturer }}</span>
-                    @if (i.exactMatch) {
-                      <span class="text-[10px] text-stock uppercase font-mono">exact match</span>
-                    }
+                    <span class="flex items-center gap-2">
+                      @if (i.isOEM) {
+                        <span class="text-[10px] text-signal uppercase font-mono">OE number</span>
+                      }
+                      @if (i.exactMatch) {
+                        <span class="text-[10px] text-stock uppercase font-mono">exact match</span>
+                      }
+                    </span>
                   </div>
                 }
               </div>

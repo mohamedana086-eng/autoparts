@@ -7,7 +7,16 @@ export interface VehicleSystem {
   icon: string;
 }
 
-export type MatchedOn = 'part-number' | 'name' | 'manufacturer' | 'interchange' | 'description';
+export type MatchedOn =
+  | 'part-number'
+  | 'name'
+  | 'manufacturer'
+  | 'interchange-oem'
+  | 'interchange-aftermarket'
+  | 'description';
+
+/** Which kind of number a search was answered from. */
+export type MatchIn = 'part-number' | 'oem' | 'aftermarket';
 
 export type SearchSort = 'relevance' | 'price-asc' | 'price-desc' | 'delivery';
 
@@ -36,8 +45,10 @@ export interface ProductSummary {
   supplier?: SupplierRef | null;
   /** Why this row came back, so the UI can explain non-obvious hits. */
   matchedOn?: MatchedOn;
-  /** The cross-reference that matched, when matchedOn is 'interchange'. */
+  /** The cross-reference that matched, on either interchange kind. */
   matchedVia?: string | null;
+  /** Whose number `matchedVia` is — the vehicle maker on an OE hit. */
+  matchedViaManufacturer?: string | null;
 }
 
 export interface BrandFacet {
@@ -73,6 +84,8 @@ export interface SearchResponse {
   reliability: string | null;
   /** True when narrowed to suppliers known to take stock back. */
   returns: boolean;
+  /** Which kind of number the results are restricted to, or null for any. */
+  matchIn: MatchIn | null;
   minPrice: number | null;
   maxPrice: number | null;
   sort: SearchSort;
@@ -90,6 +103,8 @@ export interface SearchResponse {
     reliabilities: { name: string; count: number }[];
     /** Results from a supplier known to take stock back. */
     returns: number;
+    /** Which kind of number found each result. Empty without a query. */
+    matchIn: { name: MatchIn; count: number }[];
   };
   products: ProductSummary[];
 }
@@ -98,7 +113,10 @@ export interface Interchange {
   id: string;
   partNumber: string;
   manufacturer: string;
+  /** Equivalent outright, as opposed to a close substitute. */
   exactMatch: boolean;
+  /** The vehicle maker's own number, as opposed to another brand's. */
+  isOEM: boolean;
 }
 
 export interface ProductDetail extends ProductSummary {

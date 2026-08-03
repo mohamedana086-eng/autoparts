@@ -307,6 +307,7 @@ async function importProduct(
         targetPartNo: x.targetPartNo,
         targetManufacturer: x.targetManufacturer,
         exactMatch: x.exactMatch,
+        isOEM: x.isOEM,
       })),
     });
     report.interchangesWritten += product.interchanges.length;

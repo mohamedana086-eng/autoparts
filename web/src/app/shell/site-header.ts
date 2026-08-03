@@ -98,7 +98,7 @@ import type { ProductSummary } from '../core/api.models';
                         class="w-full text-left px-3 py-2 flex items-center gap-3 hover:bg-ink-panel transition-colors border-b border-ink-line last:border-b-0">
                   <span class="font-mono text-xs text-paper shrink-0">{{ s.partNumber }}</span>
                   <span class="text-xs text-mute truncate flex-1">{{ s.name }}</span>
-                  @if (s.matchedOn === 'interchange' && s.matchedVia) {
+                  @if (s.matchedVia && (s.matchedOn === 'interchange-oem' || s.matchedOn === 'interchange-aftermarket')) {
                     <span class="text-[10px] text-signal shrink-0">replaces {{ s.matchedVia }}</span>
                   } @else {
                     <span class="text-[10px] text-mute shrink-0">{{ s.manufacturer }}</span>

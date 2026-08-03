@@ -2,7 +2,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { CatalogService } from '../core/catalog.service';
 import { SupplierRating } from '../core/supplier-rating';
-import type { SearchResponse, SearchSort } from '../core/api.models';
+import type { MatchIn, SearchResponse, SearchSort } from '../core/api.models';
 
 const SORT_LABELS: Array<{ value: SearchSort; label: string }> = [
   { value: 'relevance', label: 'Best match' },
@@ -122,6 +122,30 @@ const SORT_LABELS: Array<{ value: SearchSort; label: string }> = [
         </div>
       }
 
+      <!-- Also shown whenever a filter is active, even if only one kind is
+           left: hiding the row would strand an applied filter with no way to
+           see or clear it. -->
+      @if (data() && (data()!.facets.matchIn.length > 1 || data()!.matchIn)) {
+        <div class="flex flex-wrap items-center gap-2 mb-3">
+          <span class="text-[11px] uppercase tracking-wider text-mute mr-1">Found by</span>
+
+          <button type="button" (click)="setMatchIn(null)"
+                  class="text-xs px-2.5 py-1 rounded-plate border transition-colors"
+                  [class]="!data()!.matchIn ? activeChip : idleChip">
+            Any
+          </button>
+
+          @for (m of data()!.facets.matchIn; track m.name) {
+            <button type="button" (click)="setMatchIn(m.name)"
+                    class="text-xs px-2.5 py-1 rounded-plate border transition-colors"
+                    [class]="data()!.matchIn === m.name ? activeChip : idleChip">
+              {{ matchInLabel(m.name) }}
+              <span class="font-mono text-[10px] opacity-70">{{ m.count }}</span>
+            </button>
+          }
+        </div>
+      }
+
       @if (data() && (data()!.facets.reliabilities.length > 1 || showReturnsChip())) {
         <div class="flex flex-wrap items-center gap-2 mb-3">
           <span class="text-[11px] uppercase tracking-wider text-mute mr-1">Supplier</span>
@@ -220,9 +244,20 @@ const SORT_LABELS: Array<{ value: SearchSort; label: string }> = [
                 <p class="font-medium">{{ p.name }}</p>
                 <p class="text-xs text-mute mt-1">{{ p.system }}</p>
 
-                @if (p.matchedOn === 'interchange' && p.matchedVia) {
+                @if (p.matchedVia && p.matchedOn === 'interchange-oem') {
+                  <p class="text-[11px] text-signal mt-1.5">
+                    Replaces OE number
+                    <span class="font-mono">{{ p.matchedVia }}</span>
+                    @if (p.matchedViaManufacturer) {
+                      <span class="text-mute">&nbsp;· {{ p.matchedViaManufacturer }}</span>
+                    }
+                  </p>
+                } @else if (p.matchedVia && p.matchedOn === 'interchange-aftermarket') {
                   <p class="text-[11px] text-signal mt-1.5">
                     Replaces <span class="font-mono">{{ p.matchedVia }}</span>
+                    @if (p.matchedViaManufacturer) {
+                      <span class="text-mute">&nbsp;· {{ p.matchedViaManufacturer }}</span>
+                    }
                   </p>
                 }
 
@@ -253,7 +288,10 @@ const SORT_LABELS: Array<{ value: SearchSort; label: string }> = [
 
           @if (data()!.products.length === 0) {
             <div class="border border-dashed border-ink-line rounded-plate p-10 text-center text-mute text-sm">
-              @if (data()!.manufacturer) {
+              @if (data()!.matchIn) {
+                Nothing matched "{{ query() }}" as {{ matchInLabel(data()!.matchIn!).toLowerCase() }}.
+                <button type="button" (click)="setMatchIn(null)" class="text-signal hover:underline">Search every number</button>
+              } @else if (data()!.manufacturer) {
                 Nothing from {{ data()!.manufacturer }} here.
                 <button type="button" (click)="setBrand(null)" class="text-signal hover:underline">Show all brands</button>
               } @else if (query()) {
@@ -371,6 +409,7 @@ export class SearchPage {
           minRating: params.get('minRating'),
           reliability: params.get('reliability'),
           returns: params.get('returns'),
+          matchIn: params.get('matchIn'),
           sort: params.get('sort'),
           minPrice: params.get('minPrice'),
           maxPrice: params.get('maxPrice'),
@@ -416,6 +455,21 @@ export class SearchPage {
 
   protected setReliability(name: string | null): void {
     this.merge({ reliability: name });
+  }
+
+  protected setMatchIn(name: MatchIn | null): void {
+    this.merge({ matchIn: name });
+  }
+
+  protected matchInLabel(name: MatchIn): string {
+    switch (name) {
+      case 'part-number':
+        return 'Part number';
+      case 'oem':
+        return 'OEM number';
+      case 'aftermarket':
+        return 'Aftermarket cross-ref';
+    }
   }
 
   /** Only ever set to `true` or dropped — "returns=false" would read as

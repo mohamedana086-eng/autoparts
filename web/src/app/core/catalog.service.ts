@@ -21,6 +21,7 @@ export class CatalogService {
     minRating?: string | null;
     reliability?: string | null;
     returns?: string | null;
+    matchIn?: string | null;
     minPrice?: string | null;
     maxPrice?: string | null;
     limit?: number;
@@ -35,6 +36,7 @@ export class CatalogService {
     if (opts.minRating) params = params.set('minRating', opts.minRating);
     if (opts.reliability) params = params.set('reliability', opts.reliability);
     if (opts.returns) params = params.set('returns', opts.returns);
+    if (opts.matchIn) params = params.set('matchIn', opts.matchIn);
     if (opts.minPrice) params = params.set('minPrice', opts.minPrice);
     if (opts.maxPrice) params = params.set('maxPrice', opts.maxPrice);
     if (opts.limit) params = params.set('limit', String(opts.limit));

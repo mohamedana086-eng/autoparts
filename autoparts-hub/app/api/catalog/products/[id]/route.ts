@@ -42,6 +42,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
         partNumber: i.targetPartNo,
         manufacturer: i.targetManufacturer,
         exactMatch: i.exactMatch,
+        isOEM: i.isOEM,
       })),
     },
   });
