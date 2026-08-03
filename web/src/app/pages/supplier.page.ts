@@ -3,17 +3,12 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { SuppliersService, type SupplierDetail } from '../core/suppliers.service';
 import { CatalogService } from '../core/catalog.service';
 import { SupplierRating } from '../core/supplier-rating';
+import { SupplierBadges } from '../core/supplier-badges';
 import type { ProductSummary, SearchResponse } from '../core/api.models';
-
-const RELIABILITY_STYLE: Record<string, string> = {
-  official: 'border-stock text-stock',
-  reliable: 'border-signal text-signal',
-  standard: 'border-ink-line text-mute',
-};
 
 @Component({
   selector: 'app-supplier',
-  imports: [RouterLink, SupplierRating],
+  imports: [RouterLink, SupplierRating, SupplierBadges],
   template: `
     @if (error()) {
       <div class="max-w-5xl mx-auto px-6 py-16 text-center">
@@ -30,8 +25,8 @@ const RELIABILITY_STYLE: Record<string, string> = {
 
         <div class="flex flex-wrap items-baseline gap-3 mt-3 mb-2">
           <h1 class="font-display text-2xl font-bold">{{ supplier()!.name }}</h1>
-          <span class="font-mono text-[10px] uppercase px-2 py-0.5 rounded-plate border"
-                [class]="badge(supplier()!.reliability)">{{ supplier()!.reliability }}</span>
+          <app-supplier-badges [reliability]="supplier()!.reliability"
+                               [acceptsReturns]="supplier()!.acceptsReturns" />
           <app-supplier-rating class="text-sm" [rating]="supplier()!.rating" [name]="supplier()!.name" />
           <span class="font-mono text-xs text-mute">{{ supplier()!.code }}</span>
         </div>
@@ -158,7 +153,4 @@ export class SupplierPage {
     });
   }
 
-  protected badge(reliability: string): string {
-    return RELIABILITY_STYLE[reliability] ?? RELIABILITY_STYLE['standard'];
-  }
 }

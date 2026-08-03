@@ -14,6 +14,7 @@ const BLANK: SupplierInput = {
   description: '',
   reliability: 'standard',
   rating: null,
+  acceptsReturns: null,
 };
 
 const RELIABILITY_STYLE: Record<string, string> = {
@@ -87,6 +88,17 @@ const RELIABILITY_STYLE: Record<string, string> = {
             </select>
           </label>
 
+          <label class="grid gap-1 text-xs text-mute">
+            Returns accepted
+            <select [value]="returnsValue(form().acceptsReturns)"
+                    (change)="patchReturns($any($event.target).value)"
+                    class="bg-ink border border-ink-line rounded-plate px-3 py-2 text-sm text-paper">
+              <option value="">Not established</option>
+              <option value="true">Yes</option>
+              <option value="false">No</option>
+            </select>
+          </label>
+
           <div class="grid gap-1 text-xs text-mute">
             <span>Rating</span>
             <div class="flex items-center gap-1 h-[38px]">
@@ -130,6 +142,7 @@ const RELIABILITY_STYLE: Record<string, string> = {
               <th class="px-4 py-3 font-medium">Supplier</th>
               <th class="px-4 py-3 font-medium">Code</th>
               <th class="px-4 py-3 font-medium">Reliability</th>
+              <th class="px-4 py-3 font-medium">Returns</th>
               <th class="px-4 py-3 font-medium">Rating</th>
               <th class="px-4 py-3 font-medium">Parts</th>
               <th class="px-4 py-3"></th>
@@ -146,6 +159,17 @@ const RELIABILITY_STYLE: Record<string, string> = {
                 <td class="px-4 py-3">
                   <span class="font-mono text-[10px] uppercase px-2 py-0.5 rounded-plate border"
                         [class]="badge(s.reliability)">{{ s.reliability }}</span>
+                </td>
+                <td class="px-4 py-3">
+                  <select [value]="returnsValue(s.acceptsReturns)"
+                          (change)="setReturns(s, $any($event.target).value)"
+                          [disabled]="returnsId() === s.id"
+                          [attr.aria-label]="'Returns accepted by ' + s.name"
+                          class="bg-ink border border-ink-line rounded-plate px-2 py-1 text-xs text-paper disabled:opacity-50">
+                    <option value="">—</option>
+                    <option value="true">Yes</option>
+                    <option value="false">No</option>
+                  </select>
                 </td>
                 <td class="px-4 py-3">
                   <div class="flex items-center gap-1">
@@ -183,7 +207,7 @@ const RELIABILITY_STYLE: Record<string, string> = {
               </tr>
             }
             @if (suppliers().length === 0) {
-              <tr><td colspan="6" class="px-4 py-8 text-center text-mute text-sm">No suppliers yet.</td></tr>
+              <tr><td colspan="7" class="px-4 py-8 text-center text-mute text-sm">No suppliers yet.</td></tr>
             }
           </tbody>
         </table>
@@ -201,6 +225,7 @@ export class AdminSuppliersPage {
   protected readonly notice = signal<string | null>(null);
   protected readonly deletingId = signal<string | null>(null);
   protected readonly ratingId = signal<string | null>(null);
+  protected readonly returnsId = signal<string | null>(null);
 
   protected readonly editing = signal(false);
   protected readonly editingId = signal<string | null>(null);
@@ -238,6 +263,20 @@ export class AdminSuppliersPage {
     this.form.update((f) => ({ ...f, rating: f.rating === star ? null : star }));
   }
 
+  /** The tri-state as a select value. Empty string is "not established", which
+   *  has to stay distinct from a recorded "no". */
+  protected returnsValue(value: boolean | null): string {
+    return value === null || value === undefined ? '' : String(value);
+  }
+
+  protected parseReturns(raw: string): boolean | null {
+    return raw === '' ? null : raw === 'true';
+  }
+
+  protected patchReturns(raw: string): void {
+    this.form.update((f) => ({ ...f, acceptsReturns: this.parseReturns(raw) }));
+  }
+
   protected startCreate(): void {
     this.form.set({ ...BLANK });
     this.editingId.set(null);
@@ -254,6 +293,7 @@ export class AdminSuppliersPage {
       description: s.description ?? '',
       reliability: s.reliability,
       rating: s.rating,
+      acceptsReturns: s.acceptsReturns,
     });
     this.editingId.set(s.id);
     this.editing.set(true);
@@ -304,6 +344,23 @@ export class AdminSuppliersPage {
       this.error.set(err?.error?.error ?? 'Could not save that rating.');
     } finally {
       this.ratingId.set(null);
+    }
+  }
+
+  /** Return terms straight from the table, without a full edit. */
+  protected async setReturns(supplier: AdminSupplier, raw: string): Promise<void> {
+    this.returnsId.set(supplier.id);
+    this.error.set(null);
+    this.notice.set(null);
+    try {
+      const res = await this.admin.setSupplierReturns(supplier.id, this.parseReturns(raw));
+      this.suppliers.update((list) =>
+        list.map((s) => (s.id === supplier.id ? res.supplier : s))
+      );
+    } catch (err: any) {
+      this.error.set(err?.error?.error ?? 'Could not save those return terms.');
+    } finally {
+      this.returnsId.set(null);
     }
   }
 

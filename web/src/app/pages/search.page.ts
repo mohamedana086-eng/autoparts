@@ -122,6 +122,36 @@ const SORT_LABELS: Array<{ value: SearchSort; label: string }> = [
         </div>
       }
 
+      @if (data() && (data()!.facets.reliabilities.length > 1 || showReturnsChip())) {
+        <div class="flex flex-wrap items-center gap-2 mb-3">
+          <span class="text-[11px] uppercase tracking-wider text-mute mr-1">Supplier</span>
+
+          <button type="button" (click)="setReliability(null)"
+                  class="text-xs px-2.5 py-1 rounded-plate border transition-colors"
+                  [class]="!data()!.reliability ? activeChip : idleChip">
+            Any
+          </button>
+
+          @for (r of data()!.facets.reliabilities; track r.name) {
+            <button type="button" (click)="setReliability(r.name)"
+                    class="text-xs px-2.5 py-1 rounded-plate border transition-colors capitalize"
+                    [class]="data()!.reliability === r.name ? activeChip : idleChip">
+              {{ r.name }} <span class="font-mono text-[10px] opacity-70">{{ r.count }}</span>
+            </button>
+          }
+
+          @if (showReturnsChip()) {
+            <button type="button" (click)="toggleReturns()"
+                    [attr.aria-pressed]="data()!.returns"
+                    class="text-xs px-2.5 py-1 rounded-plate border transition-colors"
+                    [class]="data()!.returns ? activeChip : idleChip">
+              Returns accepted
+              <span class="font-mono text-[10px] opacity-70">{{ data()!.facets.returns }}</span>
+            </button>
+          }
+        </div>
+      }
+
       @if (ratingThresholds().length > 0) {
         <div class="flex flex-wrap items-center gap-2 mb-6">
           <span class="text-[11px] uppercase tracking-wider text-mute mr-1">Supplier rating</span>
@@ -205,6 +235,9 @@ const SORT_LABELS: Array<{ value: SearchSort; label: string }> = [
                       [name]="supplier.name"
                       [showUnrated]="false"
                       [attr.title]="supplier.name + (supplier.rating ? ' rated ' + supplier.rating + ' out of 5' : '')" />
+                    @if (supplier.acceptsReturns === true) {
+                      <span class="text-stock">Returns accepted</span>
+                    }
                   }
                 </div>
               </div>
@@ -269,9 +302,30 @@ export class SearchPage {
    * above it did. Of several thresholds selecting the same set, the highest
    * is kept: it is the strongest claim that is true of it.
    */
+  /**
+   * How many results the supplier facets were counted over — every product in
+   * the current system, before any supplier filter narrowed it. The rating
+   * facet buckets every product exactly once, unrated included, so summing it
+   * gives that total without the API having to send it separately.
+   */
+  private readonly facetTotal = computed(() =>
+    (this.data()?.facets.supplierRatings ?? []).reduce((sum, f) => sum + f.count, 0)
+  );
+
+  /**
+   * Whether "Returns accepted" is worth offering. Hidden when every result
+   * already comes from a supplier who takes stock back, for the same reason
+   * the rating thresholds are: a chip that selects the whole page is not a
+   * filter, it is furniture.
+   */
+  protected readonly showReturnsChip = computed(() => {
+    const returns = this.data()?.facets.returns ?? 0;
+    return returns > 0 && returns < this.facetTotal();
+  });
+
   protected readonly ratingThresholds = computed(() => {
     const facets = this.data()?.facets.supplierRatings ?? [];
-    const total = facets.reduce((sum, f) => sum + f.count, 0);
+    const total = this.facetTotal();
 
     const out: Array<{ min: number; count: number }> = [];
     let kept = -1;
@@ -315,6 +369,8 @@ export class SearchPage {
           variant: params.get('variant'),
           supplier: params.get('supplier'),
           minRating: params.get('minRating'),
+          reliability: params.get('reliability'),
+          returns: params.get('returns'),
           sort: params.get('sort'),
           minPrice: params.get('minPrice'),
           maxPrice: params.get('maxPrice'),
@@ -356,6 +412,16 @@ export class SearchPage {
 
   protected setMinRating(min: number | null): void {
     this.merge({ minRating: min === null ? null : String(min) });
+  }
+
+  protected setReliability(name: string | null): void {
+    this.merge({ reliability: name });
+  }
+
+  /** Only ever set to `true` or dropped — "returns=false" would read as
+   *  "suppliers who refuse returns", which is not what the chip offers. */
+  protected toggleReturns(): void {
+    this.merge({ returns: this.data()?.returns ? null : 'true' });
   }
 
   protected applyPrice(): void {

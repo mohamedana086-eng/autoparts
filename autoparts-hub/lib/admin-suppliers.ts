@@ -23,6 +23,9 @@ export interface SupplierInput {
   reliability: string;
   /** Null means unrated, which is deliberately different from a low rating. */
   rating: number | null;
+  /** Null means the return terms are not established, which is deliberately
+   *  different from knowing they refuse. */
+  acceptsReturns: boolean | null;
 }
 
 /**
@@ -48,6 +51,26 @@ export function readRating(
   }
 
   return { ok: true, value: rating };
+}
+
+/**
+ * A tri-state flag from a request body.
+ *
+ * Absent, empty or explicitly null all mean "not established" — the admin
+ * form sends an empty select value for that. Everything else has to be an
+ * actual boolean or the string form of one, so a typo cannot quietly land as
+ * a confident "no".
+ */
+export function readTriStateFlag(
+  raw: unknown,
+  label: string
+): { ok: true; value: boolean | null } | { ok: false; error: string } {
+  if (raw === undefined || raw === null || raw === '') return { ok: true, value: null };
+  if (typeof raw === 'boolean') return { ok: true, value: raw };
+  if (raw === 'true') return { ok: true, value: true };
+  if (raw === 'false') return { ok: true, value: false };
+
+  return { ok: false, error: `${label} must be yes, no, or left blank.` };
 }
 
 /** Lowercase, hyphenated, url-safe — a supplier's page is addressed by it. */
@@ -83,17 +106,29 @@ export function readSupplierInput(
   const rating = readRating(body.rating);
   if (!rating.ok) return rating;
 
+  const acceptsReturns = readTriStateFlag(body.acceptsReturns, 'Returns');
+  if (!acceptsReturns.ok) return acceptsReturns;
+
   const description = String(body.description ?? '').trim();
 
   return {
     ok: true,
-    value: { name, code, slug, description: description || null, reliability, rating: rating.value },
+    value: {
+      name,
+      code,
+      slug,
+      description: description || null,
+      reliability,
+      rating: rating.value,
+      acceptsReturns: acceptsReturns.value,
+    },
   };
 }
 
 export function serialiseSupplier(s: {
   id: string; code: string; slug: string; name: string; description: string | null;
-  reliability: string; rating: number | null; _count?: { products: number };
+  reliability: string; rating: number | null; acceptsReturns: boolean | null;
+  _count?: { products: number };
 }) {
   return {
     id: s.id,
@@ -103,6 +138,7 @@ export function serialiseSupplier(s: {
     description: s.description,
     reliability: s.reliability,
     rating: s.rating,
+    acceptsReturns: s.acceptsReturns,
     productCount: s._count?.products ?? 0,
   };
 }

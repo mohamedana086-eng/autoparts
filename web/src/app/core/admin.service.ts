@@ -108,13 +108,23 @@ export class AdminService {
   }
 
   /**
-   * Sets only the rating. A body carrying nothing else is what the API reads
-   * as a rating-only edit, so clicking a star cannot disturb the code or the
-   * url the supplier's page lives at.
+   * Sets only the rating. A body carrying nothing but the quick fields is
+   * what the API reads as a classification-only edit, so clicking a star
+   * cannot disturb the code or the url the supplier's page lives at.
    */
   rateSupplier(id: string, rating: number | null): Promise<{ supplier: AdminSupplier }> {
     return firstValueFrom(
       this.http.patch<{ supplier: AdminSupplier }>(`/api/admin/suppliers/${id}`, { rating })
+    );
+  }
+
+  /** Sets only the return terms. Same quick-edit path as rateSupplier. */
+  setSupplierReturns(
+    id: string,
+    acceptsReturns: boolean | null
+  ): Promise<{ supplier: AdminSupplier }> {
+    return firstValueFrom(
+      this.http.patch<{ supplier: AdminSupplier }>(`/api/admin/suppliers/${id}`, { acceptsReturns })
     );
   }
 

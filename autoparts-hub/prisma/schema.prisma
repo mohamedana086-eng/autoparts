@@ -41,6 +41,12 @@ model Supplier {
   /// which is not the same as rating them badly — the search filter treats
   /// unrated suppliers as excluded rather than as zero.
   rating       Int?
+  /// Whether they take stock back. Its own column rather than a third value
+  /// of `reliability`, because it is not an alternative to being an official
+  /// distributor — a supplier can be both, or neither. Null means the terms
+  /// have not been established, which is not the same as knowing they refuse:
+  /// the filter only ever matches an explicit yes.
+  acceptsReturns Boolean?
   products     Product[]
   markupRules  MarkupRule[]
 }

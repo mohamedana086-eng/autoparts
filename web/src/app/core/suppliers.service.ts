@@ -12,6 +12,9 @@ export interface SupplierSummary {
   reliability: string;
   /** How well they perform, 1–5, or null when nobody has rated them yet. */
   rating: number | null;
+  /** Whether they take stock back. Null when the terms are not established,
+   *  which is not the same as knowing they refuse. */
+  acceptsReturns: boolean | null;
   productCount: number;
 }
 

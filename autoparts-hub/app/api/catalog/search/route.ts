@@ -7,6 +7,10 @@ import {
 type Sort = 'relevance' | 'price-asc' | 'price-desc' | 'delivery';
 const SORTS: Sort[] = ['relevance', 'price-asc', 'price-desc', 'delivery'];
 
+/** Mirrors Supplier.reliability. Kept here rather than imported from
+ *  lib/admin-suppliers, which is server-only for the admin routes. */
+const RELIABILITIES = ['official', 'reliable', 'standard'];
+
 /** Why a row came back, so the UI can explain non-obvious hits. */
 type MatchedOn = 'part-number' | 'name' | 'manufacturer' | 'interchange' | 'description';
 
@@ -30,6 +34,19 @@ export async function GET(req: NextRequest) {
     Number.isInteger(requestedMinRating) && requestedMinRating >= 1 && requestedMinRating <= 5
       ? requestedMinRating
       : null;
+
+  // Supplier classification. `reliability` is what the trading relationship
+  // is; `returns` is whether they take stock back. Independent of each other
+  // and of the rating, so all three compose.
+  const requestedReliability = searchParams.get('reliability')?.trim() || undefined;
+  const reliability =
+    requestedReliability && RELIABILITIES.includes(requestedReliability)
+      ? requestedReliability
+      : undefined;
+
+  // Only an explicit yes matches. A supplier whose return terms have not been
+  // recorded is not evidence that they accept them.
+  const returnsOnly = searchParams.get('returns') === 'true';
 
   const requestedSort = searchParams.get('sort') as Sort | null;
   const sort: Sort = requestedSort && SORTS.includes(requestedSort) ? requestedSort : 'relevance';
@@ -160,6 +177,21 @@ export async function GET(req: NextRequest) {
     ratingCounts.set(key, (ratingCounts.get(key) ?? 0) + 1);
   }
 
+  // Counted on the same set as the brand and rating facets, so each filter
+  // describes what is in this system rather than what the other filters have
+  // already removed.
+  const reliabilityCounts = new Map<string, number>();
+  let returnsCount = 0;
+  for (const p of inSystem) {
+    if (p.supplier) {
+      reliabilityCounts.set(
+        p.supplier.reliability,
+        (reliabilityCounts.get(p.supplier.reliability) ?? 0) + 1
+      );
+      if (p.supplier.acceptsReturns === true) returnsCount++;
+    }
+  }
+
   const needle = normalisePartNumber(q);
   const lower = q.toLowerCase();
   const lowerTokens = tokens.map((t) => t.toLowerCase());
@@ -168,6 +200,8 @@ export async function GET(req: NextRequest) {
   const scored = inSystem
     .filter((p) => !manufacturer || p.manufacturer.name.toLowerCase() === manufacturer.toLowerCase())
     .filter((p) => minRating === null || (p.supplier?.rating ?? 0) >= minRating)
+    .filter((p) => !reliability || p.supplier?.reliability === reliability)
+    .filter((p) => !returnsOnly || p.supplier?.acceptsReturns === true)
     .map((p, index) => {
       const normalisedPart = normalisePartNumber(p.partNumber);
       const name = p.name.toLowerCase();
@@ -233,7 +267,13 @@ export async function GET(req: NextRequest) {
           // Carried on the row so a result can show who it comes from and how
           // they rate, which is what makes the rating filter legible.
           supplier: p.supplier
-            ? { slug: p.supplier.slug, name: p.supplier.name, rating: p.supplier.rating }
+            ? {
+                slug: p.supplier.slug,
+                name: p.supplier.name,
+                rating: p.supplier.rating,
+                reliability: p.supplier.reliability,
+                acceptsReturns: p.supplier.acceptsReturns,
+              }
             : null,
           matchedOn,
           matchedVia,
@@ -279,6 +319,8 @@ export async function GET(req: NextRequest) {
     supplier: supplier ?? null,
     supplierName: supplierRecord?.name ?? null,
     minRating,
+    reliability: reliability ?? null,
+    returns: returnsOnly,
     minPrice,
     maxPrice,
     sort,
@@ -299,6 +341,14 @@ export async function GET(req: NextRequest) {
       supplierRatings: [...ratingCounts.entries()]
         .map(([rating, count]) => ({ rating: rating === 0 ? null : rating, count }))
         .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0)),
+      /** Ordered official → reliable → standard, not by count: it is a
+       *  ranking, and shuffling it by popularity would read as noise. */
+      reliabilities: RELIABILITIES.map((name) => ({
+        name,
+        count: reliabilityCounts.get(name) ?? 0,
+      })).filter((r) => r.count > 0),
+      /** How many results come from a supplier known to take stock back. */
+      returns: returnsCount,
     },
     products: withinPrice.slice(0, limit).map((s) => s.product),
   });

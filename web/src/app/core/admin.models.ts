@@ -117,6 +117,8 @@ export interface AdminSupplier {
   reliability: string;
   /** 1–5, or null when nobody has rated them yet. */
   rating: number | null;
+  /** Whether they take stock back. Null when the terms are not established. */
+  acceptsReturns: boolean | null;
   productCount: number;
 }
 
@@ -128,4 +130,6 @@ export interface SupplierInput {
   reliability: string;
   /** Null clears the rating back to unrated. */
   rating: number | null;
+  /** Null clears the return terms back to not-established. */
+  acceptsReturns: boolean | null;
 }

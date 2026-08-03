@@ -1,15 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { requireAdmin } from '@/lib/admin-guard';
-import { readRating, readSupplierInput, serialiseSupplier } from '@/lib/admin-suppliers';
+import {
+  readRating,
+  readSupplierInput,
+  readTriStateFlag,
+  serialiseSupplier,
+} from '@/lib/admin-suppliers';
+
+/** Fields the list view can set on their own, without a full edit. */
+const QUICK_FIELDS = ['rating', 'acceptsReturns'] as const;
 
 /**
  * PATCH /api/admin/suppliers/<id>
  *
- * Two shapes on purpose. A body carrying only `rating` sets just that — which
- * is what the star control in the list sends, and it means rating a supplier
- * cannot accidentally rewrite their code or url. Any other body is treated as
- * a full edit and validated as one.
+ * Two shapes on purpose. A body carrying nothing but the quick fields sets
+ * just those — which is what the star control and the returns toggle in the
+ * list send, and it means classifying a supplier cannot accidentally rewrite
+ * their code or the url their page lives at. Any other body is treated as a
+ * full edit and validated as one.
  */
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const denied = await requireAdmin();
@@ -25,15 +34,28 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const existing = await prisma.supplier.findUnique({ where: { id: params.id } });
   if (!existing) return NextResponse.json({ error: 'Supplier not found.' }, { status: 404 });
 
-  const ratingOnly = Object.keys(body).length === 1 && 'rating' in body;
+  const keys = Object.keys(body);
+  const quickOnly =
+    keys.length > 0 && keys.every((k) => QUICK_FIELDS.includes(k as (typeof QUICK_FIELDS)[number]));
 
-  if (ratingOnly) {
-    const rating = readRating(body.rating);
-    if (!rating.ok) return NextResponse.json({ error: rating.error }, { status: 400 });
+  if (quickOnly) {
+    const data: { rating?: number | null; acceptsReturns?: boolean | null } = {};
+
+    if ('rating' in body) {
+      const rating = readRating(body.rating);
+      if (!rating.ok) return NextResponse.json({ error: rating.error }, { status: 400 });
+      data.rating = rating.value;
+    }
+
+    if ('acceptsReturns' in body) {
+      const returns = readTriStateFlag(body.acceptsReturns, 'Returns');
+      if (!returns.ok) return NextResponse.json({ error: returns.error }, { status: 400 });
+      data.acceptsReturns = returns.value;
+    }
 
     const supplier = await prisma.supplier.update({
       where: { id: params.id },
-      data: { rating: rating.value },
+      data,
       include: { _count: { select: { products: true } } },
     });
     return NextResponse.json({ supplier: serialiseSupplier(supplier) });

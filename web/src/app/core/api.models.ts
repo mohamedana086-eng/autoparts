@@ -16,6 +16,10 @@ export interface SupplierRef {
   name: string;
   /** 1–5, or null when nobody has rated them yet. */
   rating: number | null;
+  /** official | reliable | standard — what the trading relationship is. */
+  reliability?: string;
+  /** Whether they take stock back. Null when the terms are not established. */
+  acceptsReturns?: boolean | null;
 }
 
 export interface ProductSummary {
@@ -65,6 +69,10 @@ export interface SearchResponse {
   supplierName: string | null;
   /** Minimum supplier rating in force, or null for no minimum. */
   minRating: number | null;
+  /** Supplier reliability in force, or null for any. */
+  reliability: string | null;
+  /** True when narrowed to suppliers known to take stock back. */
+  returns: boolean;
   minPrice: number | null;
   maxPrice: number | null;
   sort: SearchSort;
@@ -78,6 +86,10 @@ export interface SearchResponse {
     systems: SystemFacet[];
     manufacturers: BrandFacet[];
     supplierRatings: SupplierRatingFacet[];
+    /** Ordered official → reliable → standard; zero-count entries omitted. */
+    reliabilities: { name: string; count: number }[];
+    /** Results from a supplier known to take stock back. */
+    returns: number;
   };
   products: ProductSummary[];
 }

@@ -20,6 +20,9 @@ interface SupplierSeed {
   /** Starting performance rating, 1–5. Only applied to unrated suppliers —
    *  see the upsert below, which never overwrites one set in the admin. */
   rating: number;
+  /** Whether they take stock back. Applied the same way as `rating`: only
+   *  where the terms have not been recorded yet. */
+  acceptsReturns: boolean;
   /** Parts brands this supplier stocks. Drives the assignment below. */
   brands: string[];
 }
@@ -34,6 +37,7 @@ const SUPPLIERS: SupplierSeed[] = [
       'Official distributor for the German programme — Bosch, Hella, Mahle and Febi. ' +
       'Stock is held locally, so most lines ship the same day.',
     rating: 5,
+    acceptsReturns: true,
     brands: ['BOSCH', 'HELLA', 'MAHLE', 'FEBI BILSTEIN', 'MANN-FILTER'],
   },
   {
@@ -45,6 +49,7 @@ const SUPPLIERS: SupplierSeed[] = [
       'Braking and chassis specialist carrying Brembo, TRW, ATE and SKF. ' +
       'Deeper range on older platforms than most of the market.',
     rating: 4,
+    acceptsReturns: true,
     brands: ['BREMBO', 'TRW', 'ATE', 'SKF', 'LUK', 'SACHS'],
   },
   {
@@ -56,6 +61,7 @@ const SUPPLIERS: SupplierSeed[] = [
       'General aftermarket wholesaler — ignition, cooling, lighting and service items ' +
       'from Valeo, Denso, NGK, Gates, Osram and Philips.',
     rating: 3,
+    acceptsReturns: false,
     brands: ['VALEO', 'DENSO', 'NGK', 'GATES', 'OSRAM', 'PHILIPS', 'METALCAUCHO'],
   },
 ];
@@ -65,9 +71,10 @@ const OE_SUPPLIER_CODE = 'IB16';
 
 async function main() {
   for (const s of SUPPLIERS) {
-    // `rating` is deliberately absent from `update`: it is an admin's own
-    // judgement, and re-running the seed must not reset it. It is applied
-    // below only where nobody has set one.
+    // `rating` and `acceptsReturns` are deliberately absent from `update`:
+    // they are an admin's own judgement and the supplier's own terms, and
+    // re-running the seed must not reset either. They are applied below only
+    // where nobody has set them.
     await prisma.supplier.upsert({
       where: { code: s.code },
       update: {
@@ -83,12 +90,18 @@ async function main() {
         reliability: s.reliability,
         description: s.description,
         rating: s.rating,
+        acceptsReturns: s.acceptsReturns,
       },
     });
 
     await prisma.supplier.updateMany({
       where: { code: s.code, rating: null },
       data: { rating: s.rating },
+    });
+
+    await prisma.supplier.updateMany({
+      where: { code: s.code, acceptsReturns: null },
+      data: { acceptsReturns: s.acceptsReturns },
     });
   }
 
@@ -124,9 +137,11 @@ async function main() {
     include: { _count: { select: { products: true } } },
     orderBy: { code: 'asc' },
   })) {
+    const returns =
+      s.acceptsReturns === null ? 'returns?  ' : s.acceptsReturns ? 'returns ok' : 'no returns';
     console.log(
       `  ${s.code.padEnd(6)} ${String(s._count.products).padStart(3)} parts  ` +
-        `${s.rating === null ? 'unrated' : `${s.rating}/5    `}  /${s.slug}`
+        `${s.rating === null ? 'unrated' : `${s.rating}/5    `}  ${returns}  /${s.slug}`
     );
   }
   console.log(`unsourced remaining: ${await prisma.product.count({ where: { supplierId: null } })}`);
