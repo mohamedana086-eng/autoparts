@@ -2,6 +2,7 @@ import 'server-only';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { resolvePrice, type MarkupRule, type PriceResult } from '@/lib/pricing';
+import { normalisePartNumber } from '@/lib/part-number';
 
 /**
  * Pricing context for a catalog request.
@@ -94,17 +95,11 @@ export function roundMoney(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-/**
- * Strips everything that is not a letter or digit.
- *
- * Part numbers are printed with whatever separators the brand favours —
- * `0 986 424 815`, `09.9772.11`, `24.5219-0713.3`, `W 712/75` — and nobody
- * types them back the same way. Comparing on this form means the separators
- * stop mattering.
- */
-export function normalisePartNumber(value: string): string {
-  return value.replace(/[^a-z0-9]/gi, '').toUpperCase();
-}
+// Strips everything that is not a letter or digit. Defined in
+// lib/part-number.ts so the TecDoc importer — a plain Node script — can
+// share it without pulling this server-only module in. Re-exported because
+// callers already import it from here.
+export { normalisePartNumber };
 
 /**
  * Product ids whose part number, or one of their cross-references, matches

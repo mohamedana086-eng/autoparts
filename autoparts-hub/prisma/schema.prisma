@@ -56,6 +56,9 @@ model Product {
   basePrice      Float         // supplier purchase price, before markup
   currency       String        @default("EUR")
   stockDays      Int           @default(1) // delivery lead time in days
+  /// TecDoc's own article id, set only on imported parts. Lets a re-import
+  /// recognise what it created last time. Null on the hand-seeded catalogue.
+  tecDocId       Int?          @unique
   interchanges   Interchange[] @relation("SourcePart")
   fitments       Fitment[]
   orderItems     OrderItem[]
@@ -83,6 +86,8 @@ model VehicleMake {
   /// VIN. Used to name the make when a customer pastes a chassis number.
   wmiCodes String[]
   models   VehicleModel[]
+  /// TecDoc manufacturer id — see Product.tecDocId.
+  tecDocId Int?           @unique
 }
 
 model VehicleModel {
@@ -93,6 +98,8 @@ model VehicleModel {
   yearFrom Int
   yearTo   Int?             // null = still built
   variants VehicleVariant[]
+  /// TecDoc model-series id — see Product.tecDocId.
+  tecDocId Int?             @unique
 
   @@unique([makeId, name])
 }
@@ -109,6 +116,8 @@ model VehicleVariant {
   yearFrom   Int
   yearTo     Int?
   fitments   Fitment[]
+  /// TecDoc vehicle id — the id a fitment link refers to. See Product.tecDocId.
+  tecDocId   Int?         @unique
 
   @@unique([modelId, name])
 }

@@ -1,0 +1,195 @@
+{
+  "_comment": [
+    "Canned TecDoc responses, keyed by web-service function name.",
+    "",
+    "Not real TecDoc output — hand-written to the shape described in",
+    "lib/tecdoc/types.ts so the import job can be run end to end without a",
+    "subscription. It deliberately covers the awkward cases: an article whose",
+    "wording matches no vehicle system, an article with no name, two brands",
+    "shipping the same part number, OE and competitor cross-references, and a",
+    "fitment pointing at a vehicle outside the imported tree.",
+    "",
+    "When you have a real subscription, replace this with a genuine capture:",
+    "run one narrow query and save the response bodies under these keys."
+  ],
+
+  "getBrands": {
+    "status": 200,
+    "brands": [
+      { "brandNo": 30, "brandName": "BOSCH", "mfrName": "BOSCH", "isOe": false },
+      { "brandNo": 74, "brandName": "BMW", "mfrName": "BMW", "isOe": true }
+    ]
+  },
+
+  "getArticles": {
+    "status": 200,
+    "totalMatchingArticles": 6,
+    "articles": [
+      {
+        "articleId": 1000001,
+        "articleNumber": "0 986 424 815",
+        "brandNo": 30,
+        "mfrName": "BOSCH",
+        "articleName": "Brake Pad Set, disc brake",
+        "genericArticleDescription": "Brake Pad Set",
+        "assemblyGroups": [
+          { "assemblyGroupNodeId": 100006, "assemblyGroupName": "Braking System" }
+        ],
+        "articleAttributes": [
+          { "attrName": "Width", "attrValue": "155", "attrUnit": "mm" },
+          { "attrName": "Height", "attrValue": "62", "attrUnit": "mm" },
+          { "attrName": "Wear Warning Contact", "attrValue": "incl. wear warning contact" }
+        ],
+        "articleNumbers": [
+          { "articleNumber": "0 986 424 815", "numberType": 0, "mfrName": "BOSCH" },
+          { "articleNumber": "34 11 6 794 917", "numberType": 1, "mfrName": "BMW" },
+          { "articleNumber": "GDB1330", "numberType": 3, "mfrName": "TRW" },
+          { "articleNumber": "P 06 020", "numberType": 3, "mfrName": "BREMBO" }
+        ]
+      },
+      {
+        "articleId": 1000002,
+        "articleNumber": "F 026 407 023",
+        "brandNo": 30,
+        "mfrName": "BOSCH",
+        "articleName": "Oil Filter",
+        "genericArticleDescription": "Oil Filter",
+        "assemblyGroups": [
+          { "assemblyGroupNodeId": 100010, "assemblyGroupName": "Filter" }
+        ],
+        "articleAttributes": [
+          { "attrName": "Filter type", "attrValue": "Spin-on Filter" },
+          { "attrName": "Outer diameter", "attrValue": "76", "attrUnit": "mm" }
+        ],
+        "articleNumbers": [
+          { "articleNumber": "F 026 407 023", "numberType": 0, "mfrName": "BOSCH" },
+          { "articleNumber": "11 42 7 953 129", "numberType": 1, "mfrName": "BMW" },
+          { "articleNumber": "W 712/75", "numberType": 3, "mfrName": "MANN-FILTER" }
+        ]
+      },
+      {
+        "articleId": 1000003,
+        "articleNumber": "0 242 236 562",
+        "brandNo": 30,
+        "mfrName": "BOSCH",
+        "articleName": "Spark Plug",
+        "genericArticleDescription": "Spark Plug",
+        "assemblyGroups": [
+          { "assemblyGroupNodeId": 100020, "assemblyGroupName": "Ignition / Glow" }
+        ],
+        "articleAttributes": [
+          { "attrName": "Electrode gap", "attrValue": "0,8", "attrUnit": "mm" },
+          { "attrName": "Thread size", "attrValue": "M12x1,25" }
+        ],
+        "articleNumbers": [
+          { "articleNumber": "0 242 236 562", "numberType": 0, "mfrName": "BOSCH" },
+          { "articleNumber": "12 12 0 037 244", "numberType": 1, "mfrName": "BMW" }
+        ]
+      },
+      {
+        "_note": "No wording maps to a vehicle system — expect a skip, not a guess.",
+        "articleId": 1000004,
+        "articleNumber": "1 987 946 041",
+        "brandNo": 30,
+        "mfrName": "BOSCH",
+        "articleName": "Universal service item",
+        "genericArticleDescription": "",
+        "assemblyGroups": [],
+        "articleNumbers": [
+          { "articleNumber": "1 987 946 041", "numberType": 0, "mfrName": "BOSCH" }
+        ]
+      },
+      {
+        "_note": "No article name at all — expect a skip.",
+        "articleId": 1000005,
+        "articleNumber": "0 000 000 000",
+        "brandNo": 30,
+        "mfrName": "BOSCH",
+        "articleName": "",
+        "genericArticleDescription": "",
+        "assemblyGroups": [
+          { "assemblyGroupNodeId": 100006, "assemblyGroupName": "Braking System" }
+        ],
+        "articleNumbers": []
+      },
+      {
+        "_note": "BMW ships the same number BOSCH does above — expect a reported collision, and no overwrite.",
+        "articleId": 2000001,
+        "articleNumber": "0 986 424 815",
+        "brandNo": 74,
+        "mfrName": "BMW",
+        "articleName": "Brake Pad Set, disc brake",
+        "genericArticleDescription": "Brake Pad Set",
+        "assemblyGroups": [
+          { "assemblyGroupNodeId": 100006, "assemblyGroupName": "Braking System" }
+        ],
+        "articleNumbers": [
+          { "articleNumber": "0 986 424 815", "numberType": 0, "mfrName": "BMW" }
+        ]
+      }
+    ]
+  },
+
+  "getManufacturers": {
+    "status": 200,
+    "manufacturers": [{ "manufacturerId": 16, "manufacturerName": "BMW" }]
+  },
+
+  "getModelSeries": {
+    "status": 200,
+    "modelSeries": [
+      {
+        "modelId": 3286,
+        "modelName": "3 Series (E90)",
+        "yearOfConstructionFrom": 200412,
+        "yearOfConstructionTo": 201112
+      },
+      {
+        "_note": "No start year — expect this one to be dropped by mapModel.",
+        "modelId": 9999,
+        "modelName": "Prototype series",
+        "yearOfConstructionFrom": 0
+      }
+    ]
+  },
+
+  "getVehicleIdsByCriteria": {
+    "status": 200,
+    "data": [
+      {
+        "vehicleId": 6553,
+        "typeName": "320d 2.0",
+        "modelId": 3286,
+        "manufacturerId": 16,
+        "engineCodes": ["N47D20"],
+        "powerKw": 130,
+        "fuelType": "Diesel",
+        "yearOfConstructionFrom": 200709,
+        "yearOfConstructionTo": 201112
+      },
+      {
+        "vehicleId": 6554,
+        "typeName": "320i 2.0",
+        "modelId": 3286,
+        "manufacturerId": 16,
+        "engineCodes": ["N46B20"],
+        "powerKw": 125,
+        "fuelType": "Petrol",
+        "yearOfConstructionFrom": 200412,
+        "yearOfConstructionTo": 201112
+      }
+    ]
+  },
+
+  "getLinkedVehiclesByArticle": {
+    "status": 200,
+    "linkedVehicles": [
+      { "vehicleId": 6553, "linkingTargetInfo": "front axle" },
+      { "vehicleId": 6554, "linkingTargetInfo": "front axle" },
+      {
+        "_note": "Outside the imported tree — expect a counted skip, not a crash.",
+        "vehicleId": 999999
+      }
+    ]
+  }
+}

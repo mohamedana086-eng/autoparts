@@ -13,6 +13,7 @@
     "db:catalog": "tsx prisma/seed-catalog.ts",
     "db:vehicles": "tsx prisma/seed-vehicles.ts",
     "db:suppliers": "tsx prisma/seed-suppliers.ts",
+    "db:import:tecdoc": "tsx prisma/import-tecdoc.ts",
     "db:studio": "prisma studio"
   },
   "dependencies": {

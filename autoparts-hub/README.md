@@ -82,6 +82,68 @@ ephemeral, read-only filesystem — which is why this uses Postgres.
 
 Change these (or delete the accounts) before deploying anywhere public.
 
+## Importing the catalogue from TecDoc
+
+`prisma/import-tecdoc.ts` replaces the hand-seeded sample with real articles,
+vehicles and fitment from a TecAlliance subscription.
+
+```bash
+npm run db:import:tecdoc -- --fixture=prisma/fixtures/tecdoc-sample.json
+npm run db:import:tecdoc -- --brand=BOSCH --limit=500
+npm run db:import:tecdoc -- --brand=BOSCH --limit=500 --apply
+```
+
+It is a **dry run unless `--apply` is passed** — it reads, maps, reports what
+it would change, and writes nothing. Run it that way first; against the
+deployed database this is the job with the most reach.
+
+| Flag | Effect |
+|---|---|
+| `--apply` | Write. Without it, nothing is written. |
+| `--fixture=PATH` | Replay canned responses instead of calling the service. No credentials needed. |
+| `--brand=NAME` | Only this brand. Repeatable. Default is every brand, which is a lot — start narrow. |
+| `--limit=N` | Stop after N articles. |
+| `--vehicles` | Also import the vehicle tree and fitment. One extra call per article. |
+
+Set `TECDOC_API_KEY` and `TECDOC_PROVIDER_ID` from your subscription (see
+`.env.example`). `TECDOC_COUNTRY` matters more than it looks: TecDoc filters
+the catalogue by market, so the wrong country returns a smaller catalogue
+rather than an error.
+
+### It does not import prices
+
+TecDoc is a catalogue — articles, brands, vehicle linkage, OE and competitor
+references. It carries no purchase price, and `Product.basePrice` is the
+supplier purchase price the whole markup engine multiplies up. So a newly
+imported article lands with `basePrice` 0 and cannot be sold until a supplier
+price list gives it a real one, and an existing product's `basePrice`,
+`currency` and `supplierId` are never touched by the import, so negotiated
+pricing and hand-corrected sourcing survive every re-run. The closing report
+counts what is still waiting on a price.
+
+### Running it offline
+
+Everything about TecAlliance's wire format lives in `lib/tecdoc/types.ts` and
+`lib/tecdoc/client.ts`; `lib/tecdoc/map.ts` is pure functions turning those
+shapes into ours. `--fixture` replays
+`prisma/fixtures/tecdoc-sample.json` through the same code path, so the
+mapping, the upserts and the report can be exercised without a subscription.
+The fixture covers the awkward cases on purpose: an article matching no
+vehicle system, one with no name, two brands shipping the same part number,
+and a fitment pointing outside the imported tree.
+
+### Two things to know before a full import
+
+- **Part numbers collide.** `Product.partNumber` is unique across the whole
+  catalogue, but TecDoc's are only unique per brand — two brands can ship the
+  same number legitimately. The import reports every collision and skips it
+  rather than overwriting another brand's product. A real fix is a compound
+  unique key on `(manufacturerId, partNumber)` and a migration to match.
+- **Imported makes have no WMI codes.** TecDoc does not publish them, and
+  they are what `lib/vin.ts` reads a chassis number with. VIN lookup keeps
+  working for the seeded makes and stays silent for imported ones until the
+  codes are filled in.
+
 ## Notes / next steps
 
 - Set a real `AUTH_SECRET` in `.env` before deploying — anyone who
@@ -89,6 +151,6 @@ Change these (or delete the accounts) before deploying anywhere public.
 - No password-reset flow yet.
 - The seeded accounts above are real working logins. Delete them before
   the deployment is public, especially the Admin one.
-- The catalog/interchange data here is a small hand-seeded sample —
-  connect it to your real supplier feeds (e.g. TecAlliance/TecDoc) by
-  replacing `prisma/seed.ts` with an import job.
+- The seeded catalog/interchange data is a small hand-written sample. The
+  TecDoc import above replaces it with real data; it still needs a supplier
+  price list on top, because TecDoc carries no purchase prices.
