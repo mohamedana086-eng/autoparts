@@ -122,23 +122,25 @@ const SORT_LABELS: Array<{ value: SearchSort; label: string }> = [
         </div>
       }
 
-      <!-- Also shown whenever a filter is active, even if only one kind is
-           left: hiding the row would strand an applied filter with no way to
-           see or clear it. -->
-      @if (data() && (data()!.facets.matchIn.length > 1 || data()!.matchIn)) {
+      <!-- Shown for every query, all three options every time. They are
+           options a customer picks, not facets that come and go: a zero on
+           "OEM number" answers whether the number they typed is an OE one,
+           which a hidden chip does not. -->
+      @if (data() && data()!.facets.matchIn.length > 0) {
         <div class="flex flex-wrap items-center gap-2 mb-3">
-          <span class="text-[11px] uppercase tracking-wider text-mute mr-1">Found by</span>
+          <span class="text-[11px] uppercase tracking-wider text-mute mr-1">Search in</span>
 
           <button type="button" (click)="setMatchIn(null)"
                   class="text-xs px-2.5 py-1 rounded-plate border transition-colors"
                   [class]="!data()!.matchIn ? activeChip : idleChip">
-            Any
+            Everything
           </button>
 
           @for (m of data()!.facets.matchIn; track m.name) {
             <button type="button" (click)="setMatchIn(m.name)"
                     class="text-xs px-2.5 py-1 rounded-plate border transition-colors"
-                    [class]="data()!.matchIn === m.name ? activeChip : idleChip">
+                    [class]="data()!.matchIn === m.name ? activeChip : idleChip"
+                    [class.opacity-50]="m.count === 0 && data()!.matchIn !== m.name">
               {{ matchInLabel(m.name) }}
               <span class="font-mono text-[10px] opacity-70">{{ m.count }}</span>
             </button>
@@ -289,8 +291,8 @@ const SORT_LABELS: Array<{ value: SearchSort; label: string }> = [
           @if (data()!.products.length === 0) {
             <div class="border border-dashed border-ink-line rounded-plate p-10 text-center text-mute text-sm">
               @if (data()!.matchIn) {
-                Nothing matched "{{ query() }}" as {{ matchInLabel(data()!.matchIn!).toLowerCase() }}.
-                <button type="button" (click)="setMatchIn(null)" class="text-signal hover:underline">Search every number</button>
+                "{{ query() }}" is not among our {{ matchInPhrase(data()!.matchIn!) }}.
+                <button type="button" (click)="setMatchIn(null)" class="text-signal hover:underline">Search everything</button>
               } @else if (data()!.manufacturer) {
                 Nothing from {{ data()!.manufacturer }} here.
                 <button type="button" (click)="setBrand(null)" class="text-signal hover:underline">Show all brands</button>
@@ -464,11 +466,23 @@ export class SearchPage {
   protected matchInLabel(name: MatchIn): string {
     switch (name) {
       case 'part-number':
-        return 'Part number';
+        return 'Part numbers';
       case 'oem':
-        return 'OEM number';
+        return 'OEM numbers';
       case 'aftermarket':
-        return 'Aftermarket cross-ref';
+        return 'Aftermarket interchanges';
+    }
+  }
+
+  /** Mid-sentence form. Not the label lowercased — that would write "oem". */
+  protected matchInPhrase(name: MatchIn): string {
+    switch (name) {
+      case 'part-number':
+        return 'part numbers';
+      case 'oem':
+        return 'OEM numbers';
+      case 'aftermarket':
+        return 'aftermarket interchanges';
     }
   }
 

@@ -217,6 +217,26 @@ export async function GET(req: NextRequest) {
   const lowerTokens = tokens.map((t) => t.toLowerCase());
   const containsEvery = (haystack: string) => lowerTokens.every((t) => haystack.includes(t));
 
+  /** Whether a number contains the query, ignoring separators either way. */
+  const numberHit = (value: string) =>
+    value.toLowerCase().includes(lower) || (!!needle && normalisePartNumber(value).includes(needle));
+
+  /**
+   * Which kinds of number this product could be found by.
+   *
+   * Independent of each other and of `matchedOn`: a part can be reachable by
+   * its own number and by an OE reference at once, and both are true. This is
+   * what the search options act on — the question is "where should the search
+   * look", not "which single field won the ranking", and answering it with the
+   * ranking is what made the options disappear on any query that landed on a
+   * name instead of a number.
+   */
+  const hitsFor = (p: (typeof inSystem)[number]): Record<MatchIn, boolean> => ({
+    'part-number': !!q && numberHit(p.partNumber),
+    oem: !!q && p.interchanges.some((i) => i.isOEM && numberHit(i.targetPartNo)),
+    aftermarket: !!q && p.interchanges.some((i) => !i.isOEM && numberHit(i.targetPartNo)),
+  });
+
   const scored = inSystem
     .filter((p) => !manufacturer || p.manufacturer.name.toLowerCase() === manufacturer.toLowerCase())
     .filter((p) => minRating === null || (p.supplier?.rating ?? 0) >= minRating)
@@ -280,6 +300,7 @@ export async function GET(req: NextRequest) {
 
       return {
         rank,
+        hits: hitsFor(p),
         product: {
           id: p.id,
           partNumber: p.partNumber,
@@ -308,28 +329,17 @@ export async function GET(req: NextRequest) {
       };
     });
 
-  // Counted before the match filter narrows anything, so each option can show
-  // what it would leave. A result is counted once, under the number it was
-  // actually found by — the same precedence the scoring above applied.
+  // Counted before the option narrows anything, so each one shows what it
+  // would leave. A result counts under every kind that can reach it, not just
+  // one: a part found by its own number that also carries a matching OE
+  // reference is genuinely findable both ways, and reporting it under only the
+  // higher-ranked one understates the other.
   const matchCounts: Record<MatchIn, number> = { 'part-number': 0, oem: 0, aftermarket: 0 };
   for (const s of scored) {
-    if (s.product.matchedOn === 'part-number') matchCounts['part-number']++;
-    else if (s.product.matchedOn === 'interchange-oem') matchCounts.oem++;
-    else if (s.product.matchedOn === 'interchange-aftermarket') matchCounts.aftermarket++;
+    for (const kind of MATCH_INS) if (s.hits[kind]) matchCounts[kind]++;
   }
 
-  const byMatch = matchIn
-    ? scored.filter((s) => {
-        switch (matchIn) {
-          case 'part-number':
-            return s.product.matchedOn === 'part-number';
-          case 'oem':
-            return s.product.matchedOn === 'interchange-oem';
-          case 'aftermarket':
-            return s.product.matchedOn === 'interchange-aftermarket';
-        }
-      })
-    : scored;
+  const byMatch = matchIn ? scored.filter((s) => s.hits[matchIn]) : scored;
 
   // Bounds describe what is available before the price filter narrows it, so
   // the UI can show the range the slider or inputs sit in.
@@ -401,12 +411,15 @@ export async function GET(req: NextRequest) {
       /** How many results come from a supplier known to take stock back. */
       returns: returnsCount,
       /**
-       * Which kind of number found each result. Only populated alongside a
-       * query — with nothing typed, nothing was found by a number.
+       * Where a search can look, and how many results each place holds.
+       *
+       * All three are always listed alongside a query, zeros included: they
+       * are options a customer picks, not facets that appear when convenient,
+       * and "OEM number 0" is the answer to "is this an OE number?" rather
+       * than an empty space. Absent without a query, since there is nothing
+       * to look for.
        */
-      matchIn: q
-        ? MATCH_INS.map((name) => ({ name, count: matchCounts[name] })).filter((m) => m.count > 0)
-        : [],
+      matchIn: q ? MATCH_INS.map((name) => ({ name, count: matchCounts[name] })) : [],
     },
     products: withinPrice.slice(0, limit).map((s) => s.product),
   });
