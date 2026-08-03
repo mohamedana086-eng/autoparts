@@ -84,8 +84,12 @@ export interface SearchResponse {
   reliability: string | null;
   /** True when narrowed to suppliers known to take stock back. */
   returns: boolean;
-  /** Which kind of number the results are restricted to, or null for any. */
-  matchIn: MatchIn | null;
+  /**
+   * Which kinds of number the results are restricted to. Empty means look
+   * everywhere, names and brands included — which is not the same as all
+   * three selected, since that still drops results found only by name.
+   */
+  matchIn: MatchIn[];
   minPrice: number | null;
   maxPrice: number | null;
   sort: SearchSort;

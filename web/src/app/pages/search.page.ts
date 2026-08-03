@@ -124,26 +124,35 @@ const SORT_LABELS: Array<{ value: SearchSort; label: string }> = [
 
       <!-- Shown for every query, all three options every time. They are
            options a customer picks, not facets that come and go: a zero on
-           "OEM number" answers whether the number they typed is an OE one,
-           which a hidden chip does not. -->
+           "OEM numbers" answers whether the number they typed is an OE one,
+           which a hidden chip does not. Any combination can be selected. -->
       @if (data() && data()!.facets.matchIn.length > 0) {
         <div class="flex flex-wrap items-center gap-2 mb-3">
           <span class="text-[11px] uppercase tracking-wider text-mute mr-1">Search in</span>
 
-          <button type="button" (click)="setMatchIn(null)"
+          <button type="button" (click)="clearMatchIn()"
+                  [attr.aria-pressed]="data()!.matchIn.length === 0"
                   class="text-xs px-2.5 py-1 rounded-plate border transition-colors"
-                  [class]="!data()!.matchIn ? activeChip : idleChip">
+                  [class]="data()!.matchIn.length === 0 ? activeChip : idleChip">
             Everything
           </button>
 
           @for (m of data()!.facets.matchIn; track m.name) {
-            <button type="button" (click)="setMatchIn(m.name)"
+            <button type="button" (click)="toggleMatchIn(m.name)"
+                    [attr.aria-pressed]="isMatchInSelected(m.name)"
                     class="text-xs px-2.5 py-1 rounded-plate border transition-colors"
-                    [class]="data()!.matchIn === m.name ? activeChip : idleChip"
-                    [class.opacity-50]="m.count === 0 && data()!.matchIn !== m.name">
+                    [class]="isMatchInSelected(m.name) ? activeChip : idleChip"
+                    [class.opacity-50]="m.count === 0 && !isMatchInSelected(m.name)">
               {{ matchInLabel(m.name) }}
               <span class="font-mono text-[10px] opacity-70">{{ m.count }}</span>
             </button>
+          }
+
+          @if (data()!.matchIn.length > 0) {
+            <span class="text-[11px] text-mute normal-case tracking-normal">
+              Only parts found by
+              {{ selectedMatchInPhrase() }} — results matched on a name are excluded.
+            </span>
           }
         </div>
       }
@@ -290,9 +299,9 @@ const SORT_LABELS: Array<{ value: SearchSort; label: string }> = [
 
           @if (data()!.products.length === 0) {
             <div class="border border-dashed border-ink-line rounded-plate p-10 text-center text-mute text-sm">
-              @if (data()!.matchIn) {
-                "{{ query() }}" is not among our {{ matchInPhrase(data()!.matchIn!) }}.
-                <button type="button" (click)="setMatchIn(null)" class="text-signal hover:underline">Search everything</button>
+              @if (data()!.matchIn.length) {
+                "{{ query() }}" is not among our {{ selectedMatchInPhrase() }}.
+                <button type="button" (click)="clearMatchIn()" class="text-signal hover:underline">Search everything</button>
               } @else if (data()!.manufacturer) {
                 Nothing from {{ data()!.manufacturer }} here.
                 <button type="button" (click)="setBrand(null)" class="text-signal hover:underline">Show all brands</button>
@@ -459,8 +468,33 @@ export class SearchPage {
     this.merge({ reliability: name });
   }
 
-  protected setMatchIn(name: MatchIn | null): void {
-    this.merge({ matchIn: name });
+  protected isMatchInSelected(name: MatchIn): boolean {
+    return this.data()?.matchIn.includes(name) === true;
+  }
+
+  /**
+   * Adds or removes one option. Turning the last one off is the same as
+   * "Everything", so the parameter is dropped rather than left empty — an
+   * empty `matchIn=` in the url would be a filter that filters nothing.
+   */
+  protected toggleMatchIn(name: MatchIn): void {
+    const current = this.data()?.matchIn ?? [];
+    const next = current.includes(name)
+      ? current.filter((m) => m !== name)
+      : [...current, name];
+
+    this.merge({ matchIn: next.length ? next.join(',') : null });
+  }
+
+  protected clearMatchIn(): void {
+    this.merge({ matchIn: null });
+  }
+
+  /** "OEM numbers", "part numbers and OEM numbers", "a, b or c". */
+  protected selectedMatchInPhrase(): string {
+    const parts = (this.data()?.matchIn ?? []).map((m) => this.matchInPhrase(m));
+    if (parts.length <= 1) return parts[0] ?? '';
+    return `${parts.slice(0, -1).join(', ')} or ${parts[parts.length - 1]}`;
   }
 
   protected matchInLabel(name: MatchIn): string {

@@ -62,11 +62,25 @@ export async function GET(req: NextRequest) {
   // recorded is not evidence that they accept them.
   const returnsOnly = searchParams.get('returns') === 'true';
 
-  // Only meaningful alongside a query — with nothing typed, nothing matched
-  // a number, and the filter would empty the page for no stated reason.
-  const requestedMatchIn = searchParams.get('matchIn') as MatchIn | null;
-  const matchIn: MatchIn | null =
-    q && requestedMatchIn && MATCH_INS.includes(requestedMatchIn) ? requestedMatchIn : null;
+  /**
+   * Which kinds of number to look in, as a comma-separated list — any one,
+   * any two, or all three.
+   *
+   * Empty means look everywhere, including names and brands. Note that this
+   * is not the same as selecting all three: all three still restricts results
+   * to those reachable by *some* number, dropping the ones that only matched
+   * on a name.
+   *
+   * Only meaningful alongside a query — with nothing typed, nothing was found
+   * by a number, and the filter would empty the page for no stated reason.
+   * Ordered by MATCH_INS rather than by however the caller listed them, so the
+   * same selection always echoes back the same way.
+   */
+  const requestedMatchIn = (searchParams.get('matchIn') ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const matchIn: MatchIn[] = q ? MATCH_INS.filter((kind) => requestedMatchIn.includes(kind)) : [];
 
   const requestedSort = searchParams.get('sort') as Sort | null;
   const sort: Sort = requestedSort && SORTS.includes(requestedSort) ? requestedSort : 'relevance';
@@ -339,7 +353,12 @@ export async function GET(req: NextRequest) {
     for (const kind of MATCH_INS) if (s.hits[kind]) matchCounts[kind]++;
   }
 
-  const byMatch = matchIn ? scored.filter((s) => s.hits[matchIn]) : scored;
+  // Any of the selected kinds is enough — the options are alternatives a
+  // customer is willing to accept, not conditions a part has to satisfy all
+  // of at once.
+  const byMatch = matchIn.length
+    ? scored.filter((s) => matchIn.some((kind) => s.hits[kind]))
+    : scored;
 
   // Bounds describe what is available before the price filter narrows it, so
   // the UI can show the range the slider or inputs sit in.
