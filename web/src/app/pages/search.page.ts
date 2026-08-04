@@ -69,7 +69,15 @@ const SORT_LABELS: Array<{ value: SearchSort; label: string }> = [
           <span class="text-mute">{{ filtersOpen() ? 'Hide' : 'Show' }}</span>
         </button>
 
-        <aside class="lg:block lg:sticky lg:top-6" [class.hidden]="!filtersOpen()">
+        <!-- Sticky alone is not enough: the filters run taller than the
+             viewport on a broad query, and a stuck element with no scroll of
+             its own simply cuts the last group off with no way to reach it.
+             It gets its own scroll, bounded to the space between its top
+             offset and the bottom of the screen. overscroll-contain stops a
+             scroll that reaches the end of the list from carrying on into the
+             results behind it. -->
+        <aside class="lg:block lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-1"
+               [class.hidden]="!filtersOpen()">
           @if (data()) {
             @if (data()!.facets.systems.length > 1 || data()!.system) {
               <div class="filter-group">
