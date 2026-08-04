@@ -2,6 +2,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { CatalogService } from '../core/catalog.service';
 import { SupplierRating } from '../core/supplier-rating';
+import { FilterGroup } from '../core/filter-group';
 import type { MatchIn, SearchResponse, SearchSort } from '../core/api.models';
 
 const SORT_LABELS: Array<{ value: SearchSort; label: string }> = [
@@ -13,7 +14,7 @@ const SORT_LABELS: Array<{ value: SearchSort; label: string }> = [
 
 @Component({
   selector: 'app-search',
-  imports: [RouterLink, SupplierRating],
+  imports: [RouterLink, SupplierRating, FilterGroup],
   template: `
     <div class="max-w-7xl mx-auto px-6 py-8">
       <div class="flex flex-wrap items-baseline gap-x-4 gap-y-1 mb-4">
@@ -80,8 +81,8 @@ const SORT_LABELS: Array<{ value: SearchSort; label: string }> = [
                [class.hidden]="!filtersOpen()">
           @if (data()) {
             @if (data()!.facets.systems.length > 1 || data()!.system) {
-              <div class="filter-group">
-                <p class="eyebrow mb-2">System</p>
+              <app-filter-group label="System" [summary]="groupSummary('system')"
+                                [open]="isGroupOpen('system')" (toggled)="toggleGroup('system')">
                 <div class="flex flex-wrap gap-1.5">
                   <button type="button" (click)="setSystem(null)" class="chip"
                           [class.chip-on]="!data()!.system" [class.chip-idle]="!!data()!.system">All</button>
@@ -93,7 +94,7 @@ const SORT_LABELS: Array<{ value: SearchSort; label: string }> = [
                     </button>
                   }
                 </div>
-              </div>
+              </app-filter-group>
             }
 
             <!-- All three options on every query. They are options a customer
@@ -101,8 +102,8 @@ const SORT_LABELS: Array<{ value: SearchSort; label: string }> = [
                  answers whether the number typed is an OE one, which a hidden
                  chip does not. Any combination can be selected. -->
             @if (data()!.facets.matchIn.length > 0) {
-              <div class="filter-group">
-                <p class="eyebrow mb-2">Search in</p>
+              <app-filter-group label="Search in" [summary]="groupSummary('matchIn')"
+                                [open]="isGroupOpen('matchIn')" (toggled)="toggleGroup('matchIn')">
                 <div class="flex flex-wrap gap-1.5">
                   <button type="button" (click)="clearMatchIn()"
                           [attr.aria-pressed]="data()!.matchIn.length === 0" class="chip"
@@ -124,12 +125,12 @@ const SORT_LABELS: Array<{ value: SearchSort; label: string }> = [
                     name are excluded.
                   </p>
                 }
-              </div>
+              </app-filter-group>
             }
 
             @if (data()!.facets.manufacturers.length > 1 || data()!.manufacturer) {
-              <div class="filter-group">
-                <p class="eyebrow mb-2">Brand</p>
+              <app-filter-group label="Brand" [summary]="groupSummary('brand')"
+                                [open]="isGroupOpen('brand')" (toggled)="toggleGroup('brand')">
                 <div class="flex flex-wrap gap-1.5">
                   <button type="button" (click)="setBrand(null)" class="chip"
                           [class.chip-on]="!data()!.manufacturer"
@@ -142,12 +143,12 @@ const SORT_LABELS: Array<{ value: SearchSort; label: string }> = [
                     </button>
                   }
                 </div>
-              </div>
+              </app-filter-group>
             }
 
             @if (data()!.facets.reliabilities.length > 1 || showReturnsChip()) {
-              <div class="filter-group">
-                <p class="eyebrow mb-2">Supplier</p>
+              <app-filter-group label="Supplier" [summary]="groupSummary('supplier')"
+                                [open]="isGroupOpen('supplier')" (toggled)="toggleGroup('supplier')">
                 <div class="flex flex-wrap gap-1.5">
                   <button type="button" (click)="setReliability(null)" class="chip"
                           [class.chip-on]="!data()!.reliability"
@@ -167,12 +168,12 @@ const SORT_LABELS: Array<{ value: SearchSort; label: string }> = [
                     </button>
                   }
                 </div>
-              </div>
+              </app-filter-group>
             }
 
             @if (ratingThresholds().length > 0) {
-              <div class="filter-group">
-                <p class="eyebrow mb-2">Supplier rating</p>
+              <app-filter-group label="Supplier rating" [summary]="groupSummary('rating')"
+                                [open]="isGroupOpen('rating')" (toggled)="toggleGroup('rating')">
                 <div class="flex flex-wrap gap-1.5">
                   <button type="button" (click)="setMinRating(null)" class="chip"
                           [class.chip-on]="!data()!.minRating"
@@ -191,12 +192,12 @@ const SORT_LABELS: Array<{ value: SearchSort; label: string }> = [
                     {{ unratedCount() }} from suppliers we have not rated
                   </p>
                 }
-              </div>
+              </app-filter-group>
             }
 
             @if (data()!.priceRange; as range) {
-              <div class="filter-group">
-                <p class="eyebrow mb-2">Price</p>
+              <app-filter-group label="Price" [summary]="groupSummary('price')"
+                                [open]="isGroupOpen('price')" (toggled)="toggleGroup('price')">
                 <div class="flex items-center gap-2">
                   <input type="number" inputmode="decimal" min="0" [value]="minPrice()"
                          (input)="minPrice.set($any($event.target).value)" (change)="applyPrice()"
@@ -213,7 +214,7 @@ const SORT_LABELS: Array<{ value: SearchSort; label: string }> = [
                     Clear price
                   </button>
                 }
-              </div>
+              </app-filter-group>
             }
           }
         </aside>
@@ -351,6 +352,56 @@ export class SearchPage {
 
   /** Only consulted below `lg`, where the sidebar collapses behind a toggle. */
   protected readonly filtersOpen = signal(false);
+
+  /**
+   * Groups the visitor has opened or closed by hand. A group not listed here
+   * follows the default: open when it has a selection, closed otherwise — so
+   * arriving on a filtered link shows what is applied without hiding it, and
+   * an untouched sidebar is a short list of headings.
+   */
+  private readonly groupOverrides = signal<Record<string, boolean>>({});
+
+  protected isGroupOpen(key: string): boolean {
+    const override = this.groupOverrides()[key];
+    return override === undefined ? this.groupSummary(key) !== '' : override;
+  }
+
+  protected toggleGroup(key: string): void {
+    const next = !this.isGroupOpen(key);
+    this.groupOverrides.update((groups) => ({ ...groups, [key]: next }));
+  }
+
+  /** What a closed heading says is currently applied. Empty means nothing. */
+  protected groupSummary(key: string): string {
+    const d = this.data();
+    if (!d) return '';
+
+    switch (key) {
+      case 'system':
+        return d.system ? d.systemName ?? d.system : '';
+      case 'matchIn':
+        return d.matchIn.map((m) => this.matchInLabel(m)).join(', ');
+      case 'brand':
+        return d.manufacturer ?? '';
+      case 'supplier': {
+        const parts: string[] = [];
+        if (d.reliability) parts.push(d.reliability);
+        if (d.returns) parts.push('returns');
+        return parts.join(', ');
+      }
+      case 'rating':
+        return d.minRating ? `${d.minRating}★${d.minRating < 5 ? '+' : ''}` : '';
+      case 'price': {
+        if (d.minPrice === null && d.maxPrice === null) return '';
+        const low = d.minPrice === null ? '' : `€${d.minPrice}`;
+        const high = d.maxPrice === null ? '' : `€${d.maxPrice}`;
+        if (low && high) return `${low}–${high}`;
+        return low ? `from ${low}` : `up to ${high}`;
+      }
+      default:
+        return '';
+    }
+  }
 
   /**
    * How many results the supplier facets were counted over — every product in
