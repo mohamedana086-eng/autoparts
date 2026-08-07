@@ -1,5 +1,6 @@
-import { Component } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { AuthService } from '../core/auth.service';
 
 @Component({
   selector: 'app-admin-layout',
@@ -8,13 +9,20 @@ import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
     <div class="max-w-7xl mx-auto px-6 py-8 grid md:grid-cols-[220px_1fr] gap-8">
       <aside>
         <p class="font-display font-bold text-sm mb-4 text-mute uppercase tracking-widest">Admin panel</p>
-        <nav class="grid gap-1">
-          @for (item of nav; track item.path) {
-            <a [routerLink]="item.path" routerLinkActive="text-paper bg-ink-panel"
-               [routerLinkActiveOptions]="{ exact: item.exact }"
-               class="flex items-center gap-2.5 px-3 py-2 rounded-plate text-sm text-mute hover:text-paper hover:bg-ink-panel transition-colors">
-              {{ item.label }}
-            </a>
+        <nav class="grid gap-4">
+          @for (section of visibleNav(); track section.heading) {
+            <div class="grid gap-1">
+              @if (section.heading) {
+                <p class="eyebrow px-3 mb-0.5">{{ section.heading }}</p>
+              }
+              @for (item of section.items; track item.path) {
+                <a [routerLink]="item.path" routerLinkActive="text-paper bg-ink-panel"
+                   [routerLinkActiveOptions]="{ exact: item.exact }"
+                   class="flex items-center gap-2.5 px-3 py-2 rounded-plate text-sm text-mute hover:text-paper hover:bg-ink-panel transition-colors">
+                  {{ item.label }}
+                </a>
+              }
+            </div>
           }
         </nav>
         <div class="mt-8 grid gap-1 text-xs text-mute">
@@ -28,13 +36,58 @@ import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
   `,
 })
 export class AdminLayout {
-  protected readonly nav = [
-    { path: '/admin', label: 'Dashboard', exact: true },
-    { path: '/admin/products', label: 'Products', exact: false },
-    { path: '/admin/suppliers', label: 'Suppliers', exact: false },
-    { path: '/admin/clients', label: 'Clients', exact: false },
-    { path: '/admin/client-categories', label: 'Client categories', exact: false },
-    { path: '/admin/markup-rules', label: 'Markup rules', exact: false },
-    { path: '/admin/orders', label: 'Orders', exact: false },
+  private readonly auth = inject(AuthService);
+
+  /**
+   * Grouped rather than one flat list. Seven unlabelled links gave no clue
+   * which of them decided a price and which described the catalogue, and the
+   * customer settings that arrived together read as unrelated entries.
+   */
+  private readonly nav = [
+    { heading: '', adminOnly: false, items: [{ path: '/admin', label: 'Dashboard', exact: true }] },
+    {
+      heading: 'Catalogue',
+      adminOnly: true,
+      items: [
+        { path: '/admin/products', label: 'Products', exact: false },
+        { path: '/admin/suppliers', label: 'Suppliers', exact: false },
+      ],
+    },
+    {
+      heading: 'Customers',
+      adminOnly: false,
+      items: [
+        { path: '/admin/clients', label: 'Customers', exact: false },
+        { path: '/admin/client-categories', label: 'Categories & price lists', exact: false, adminOnly: true },
+        { path: '/admin/currencies', label: 'Currencies', exact: false, adminOnly: true },
+      ],
+    },
+    {
+      heading: 'Pricing',
+      adminOnly: true,
+      items: [{ path: '/admin/markup-rules', label: 'Markup rules', exact: false }],
+    },
+    {
+      heading: 'Sales',
+      adminOnly: false,
+      items: [{ path: '/admin/orders', label: 'Orders', exact: false }],
+    },
   ];
+
+  /**
+   * What this account can actually use. Tidiness only — the API scopes and
+   * refuses on its own, and a hidden link is not a permission. A SALES user
+   * following a hidden url gets the same 403 either way.
+   */
+  protected readonly visibleNav = computed(() => {
+    if (this.auth.isAdmin()) return this.nav;
+
+    return this.nav
+      .filter((section) => !section.adminOnly)
+      .map((section) => ({
+        ...section,
+        items: section.items.filter((item) => !('adminOnly' in item && item.adminOnly)),
+      }))
+      .filter((section) => section.items.length > 0);
+  });
 }

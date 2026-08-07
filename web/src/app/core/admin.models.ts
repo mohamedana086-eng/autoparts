@@ -9,11 +9,54 @@ export interface AdminClient {
   id: string;
   name: string;
   email: string;
-  role: 'ADMIN' | 'B2B' | 'RETAIL';
+  role: 'ADMIN' | 'SALES' | 'B2B' | 'RETAIL';
   city: string | null;
   hasLogin: boolean;
   categoryId: string | null;
   categoryName: string | null;
+  /** Off the marked-up price. See the order of operations in the API. */
+  discountPercent: number;
+  currencyId: string | null;
+  currencyCode: string | null;
+  salesManagerId: string | null;
+  salesManagerName: string | null;
+}
+
+/** What the client editor's selects need alongside the accounts themselves. */
+export interface ClientsResponse {
+  clients: AdminClient[];
+  categories: TierRef[];
+  currencies: TierRef[];
+  salesManagers: TierRef[];
+}
+
+export interface ClientInput {
+  role: string;
+  categoryId: string | null;
+  discountPercent: number;
+  currencyId: string | null;
+  salesManagerId: string | null;
+}
+
+export interface AdminCurrency {
+  id: string;
+  code: string;
+  name: string;
+  symbol: string;
+  /** Units of this currency per one unit of the base. 1 on the base. */
+  rate: number;
+  /** The currency purchase prices are kept in. Exactly one, and not editable. */
+  isBase: boolean;
+  active: boolean;
+  clientCount: number;
+}
+
+export interface CurrencyInput {
+  code: string;
+  name: string;
+  symbol: string;
+  rate: number;
+  active: boolean;
 }
 
 export interface TierRef {

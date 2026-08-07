@@ -28,6 +28,10 @@ export class AuthService {
   readonly loaded = this._loaded.asReadonly();
   readonly isLoggedIn = computed(() => this._user() !== null);
   readonly isAdmin = computed(() => this._user()?.role === 'ADMIN');
+  readonly isSales = computed(() => this._user()?.role === 'SALES');
+  /** Anyone who belongs in the admin panel at all. What they see inside it
+   *  is decided by the API, which scopes every read to the caller. */
+  readonly isStaff = computed(() => this.isAdmin() || this.isSales());
 
   async refresh(): Promise<void> {
     try {

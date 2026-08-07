@@ -138,6 +138,6 @@ export interface ProductResponse {
 export interface SessionUser {
   id: string;
   name: string;
-  role: 'ADMIN' | 'B2B' | 'RETAIL';
+  role: 'ADMIN' | 'SALES' | 'B2B' | 'RETAIL';
   tierName: string;
 }

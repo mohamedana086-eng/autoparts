@@ -1,14 +1,17 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { requireAdmin } from '@/lib/admin-guard';
+import { requireStaff } from '@/lib/admin-guard';
 import { roundMoney } from '@/lib/catalog';
 
 // GET /api/admin/orders
 export async function GET() {
-  const denied = await requireAdmin();
-  if (denied) return denied;
+  const gate = await requireStaff();
+  if (!gate.ok) return gate.response;
 
+  // Scoped through the customer's owner, so a salesperson sees the orders of
+  // the accounts they look after and no others.
   const orders = await prisma.order.findMany({
+    where: gate.isAdmin ? {} : { client: { salesManagerId: gate.session.userId } },
     include: { client: true, items: true },
     orderBy: { createdAt: 'desc' },
   });

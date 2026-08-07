@@ -30,6 +30,10 @@ export const routes: Routes = [
         loadComponent: () => import('./admin/client-categories.page').then((m) => m.AdminClientCategoriesPage),
       },
       {
+        path: 'currencies',
+        loadComponent: () => import('./admin/currencies.page').then((m) => m.AdminCurrenciesPage),
+      },
+      {
         path: 'markup-rules',
         loadComponent: () => import('./admin/markup-rules.page').then((m) => m.AdminMarkupRulesPage),
       },

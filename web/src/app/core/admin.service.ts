@@ -2,8 +2,9 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import type {
-  AdminClient, AdminOrder, AdminProduct, AdminStats, AdminSupplier, ClientCategory, MarkupRule,
-  MarkupRulesResponse, ProductInput, ProductsResponse, SupplierInput, TierRef,
+  AdminClient, AdminCurrency, AdminOrder, AdminProduct, AdminStats, AdminSupplier, ClientCategory,
+  ClientInput, ClientsResponse, CurrencyInput, MarkupRule, MarkupRulesResponse, ProductInput,
+  ProductsResponse, SupplierInput, TierRef,
 } from './admin.models';
 
 /**
@@ -18,16 +19,30 @@ export class AdminService {
     return firstValueFrom(this.http.get<AdminStats>('/api/admin/stats'));
   }
 
-  clients(): Promise<{ clients: AdminClient[]; categories: TierRef[] }> {
+  clients(): Promise<ClientsResponse> {
+    return firstValueFrom(this.http.get<ClientsResponse>('/api/admin/clients'));
+  }
+
+  updateClient(id: string, input: ClientInput): Promise<{ client: AdminClient }> {
+    return firstValueFrom(this.http.patch<{ client: AdminClient }>(`/api/admin/clients/${id}`, input));
+  }
+
+  currencies(): Promise<{ currencies: AdminCurrency[] }> {
+    return firstValueFrom(this.http.get<{ currencies: AdminCurrency[] }>('/api/admin/currencies'));
+  }
+
+  createCurrency(input: CurrencyInput): Promise<{ currency: AdminCurrency }> {
+    return firstValueFrom(this.http.post<{ currency: AdminCurrency }>('/api/admin/currencies', input));
+  }
+
+  updateCurrency(id: string, input: CurrencyInput): Promise<{ currency: AdminCurrency }> {
     return firstValueFrom(
-      this.http.get<{ clients: AdminClient[]; categories: TierRef[] }>('/api/admin/clients')
+      this.http.patch<{ currency: AdminCurrency }>(`/api/admin/currencies/${id}`, input)
     );
   }
 
-  updateClient(id: string, role: string, categoryId: string | null): Promise<{ client: AdminClient }> {
-    return firstValueFrom(
-      this.http.patch<{ client: AdminClient }>(`/api/admin/clients/${id}`, { role, categoryId })
-    );
+  deleteCurrency(id: string): Promise<{ ok: boolean }> {
+    return firstValueFrom(this.http.delete<{ ok: boolean }>(`/api/admin/currencies/${id}`));
   }
 
   categories(): Promise<{ categories: ClientCategory[] }> {

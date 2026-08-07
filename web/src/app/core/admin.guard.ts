@@ -15,6 +15,6 @@ export const adminGuard: CanMatchFn = async () => {
 
   if (!auth.loaded()) await auth.refresh();
 
-  if (auth.isAdmin()) return true;
+  if (auth.isStaff()) return true;
   return router.createUrlTree([auth.isLoggedIn() ? '/' : '/login']);
 };
