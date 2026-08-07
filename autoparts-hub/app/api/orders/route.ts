@@ -28,6 +28,10 @@ export async function GET() {
     orderBy: { createdAt: 'desc' },
   });
 
+  // Line prices are stored in the base currency; the order carries the rate
+  // that applied when it was placed. Converting on the way out shows the
+  // customer the figures they agreed to, and keeps showing them after their
+  // account is moved to another currency.
   return NextResponse.json({
     orders: orders.map((o) => ({
       id: o.id,
@@ -35,12 +39,15 @@ export async function GET() {
       status: o.status,
       createdAt: o.createdAt.toISOString(),
       units: o.items.reduce((n, i) => n + i.quantity, 0),
-      total: roundMoney(o.items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0)),
+      total: roundMoney(
+        o.items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0) * o.currencyRate
+      ),
+      currencyCode: o.currencyCode,
       lines: o.items.map((i) => ({
         partNumber: i.product.partNumber,
         name: i.product.name,
         quantity: i.quantity,
-        unitPrice: i.unitPrice,
+        unitPrice: roundMoney(i.unitPrice * o.currencyRate),
       })),
     })),
   });
@@ -98,12 +105,21 @@ export async function POST(req: NextRequest) {
   }
 
   const ctx = await loadPricingContext();
+
+  // Lines are stored in the base currency — see the migration. The rate is
+  // recorded once on the order so the whole thing can be shown back in what
+  // the customer was quoted, without the stored numbers moving if their
+  // currency is changed later.
+  const rate = ctx.currency?.rate ?? 1;
+  const currencyCode = ctx.currency?.code ?? 'EUR';
+  const symbol = ctx.currency?.symbol ?? '€';
+
   const lines = products.map((p) => ({
     productId: p.id,
     partNumber: p.partNumber,
     name: p.name,
     quantity: wanted.get(p.id)!,
-    unitPrice: priceFor(p, ctx)?.finalPrice ?? p.basePrice,
+    unitPrice: priceFor(p, ctx)?.netBase ?? p.basePrice,
   }));
 
   const total = roundMoney(lines.reduce((sum, l) => sum + l.unitPrice * l.quantity, 0));
@@ -114,12 +130,15 @@ export async function POST(req: NextRequest) {
     ? await prisma.clientCategory.findUnique({ where: { id: session.categoryId } })
     : null;
 
+  // Compared in the base currency, where both figures are denominated. Doing
+  // it after conversion would make the threshold trivial to clear on a weak
+  // currency and impossible on a strong one, for the same basket.
   if (category && category.minOrderAmount > 0 && total < category.minOrderAmount) {
     return NextResponse.json(
       {
-        error: `Orders on the ${category.name} tier start at €${category.minOrderAmount.toFixed(
-          2
-        )}. This one comes to €${total.toFixed(2)}.`,
+        error: `Orders on the ${category.name} tier start at ${symbol}${roundMoney(
+          category.minOrderAmount * rate
+        ).toFixed(2)}. This one comes to ${symbol}${roundMoney(total * rate).toFixed(2)}.`,
       },
       { status: 409 }
     );
@@ -132,6 +151,8 @@ export async function POST(req: NextRequest) {
         data: {
           reference: makeReference(),
           clientId: session.userId,
+          currencyCode,
+          currencyRate: rate,
           items: {
             create: lines.map((l) => ({
               productId: l.productId,

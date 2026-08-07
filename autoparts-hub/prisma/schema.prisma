@@ -166,12 +166,34 @@ model ClientCategory {
   markupRules        MarkupRule[]
 }
 
+// ---------- Currency ----------
+
+/// A currency prices can be shown in.
+///
+/// Exactly one row is the base: the currency the catalogue's purchase prices
+/// are actually kept in, whose rate is 1. Every other rate says how many of
+/// that currency one unit of the base buys, so converting is a multiplication
+/// and there is only ever one direction to get wrong.
+model Currency {
+  id       String   @id @default(cuid())
+  code     String   @unique // ISO 4217: EUR, USD, EGP
+  name     String
+  symbol   String
+  /// Units of this currency per one unit of the base. 1 on the base row.
+  rate     Float    @default(1)
+  /// The currency `Product.basePrice` is denominated in. Exactly one row.
+  isBase   Boolean  @default(false)
+  active   Boolean  @default(true)
+  clients  Client[]
+}
+
 // ---------- Auth ----------
 
 // Roles are stored as strings rather than a Prisma enum. The app narrows
 // them in code (toRole() in lib/auth.ts), which keeps the schema portable
 // across connectors. Allowed values:
 //   ADMIN   full access to /admin
+//   SALES   staff account: reaches only its own clients and their orders
 //   B2B     trade/wholesale account, tied to a negotiated ClientCategory
 //   RETAIL  ordinary retail customer
 
@@ -186,6 +208,22 @@ model Client {
   category         ClientCategory? @relation(fields: [categoryId], references: [id])
   orders           Order[]
   createdAt        DateTime        @default(now())
+
+  /// Taken off the price the markup engine resolves, after it has run — see
+  /// the order of operations in lib/pricing.ts. Negotiated per account, on
+  /// top of whatever tier they are on.
+  discountPercent  Float           @default(0)
+
+  /// What this account is quoted in. Null means the base currency.
+  currencyId       String?
+  currency         Currency?       @relation(fields: [currencyId], references: [id])
+
+  /// The SALES account that looks after this customer. A self-relation
+  /// because staff and customers are both rows in this table, told apart by
+  /// `role` — the same way ADMIN already is.
+  salesManagerId   String?
+  salesManager     Client?         @relation("SalesManaged", fields: [salesManagerId], references: [id])
+  managedClients   Client[]        @relation("SalesManaged")
 }
 
 // ---------- Complex markup engine ----------
@@ -232,6 +270,12 @@ model Order {
   status       String      @default("order_is_sent") // order_is_sent | processing | shipped | paid
   items        OrderItem[]
   createdAt    DateTime    @default(now())
+
+  /// What the customer was quoted in, and the rate at the time. Recorded on
+  /// the order rather than read back off the account: changing a customer's
+  /// currency later must not rewrite what their past orders said.
+  currencyCode String      @default("EUR")
+  currencyRate Float       @default(1)
 }
 
 model OrderItem {

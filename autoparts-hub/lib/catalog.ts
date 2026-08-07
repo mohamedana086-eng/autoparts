@@ -1,7 +1,12 @@
 import 'server-only';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
-import { resolvePrice, type MarkupRule, type PriceResult } from '@/lib/pricing';
+import {
+  resolvePrice,
+  type MarkupRule,
+  type PriceResult,
+  type PricingCurrency,
+} from '@/lib/pricing';
 import { normalisePartNumber } from '@/lib/part-number';
 
 /**
@@ -16,16 +21,42 @@ export interface PricingContext {
   rules: MarkupRule[];
   tierName: string;
   isLoggedIn: boolean;
+  /** The signed-in account's negotiated discount. Zero when anonymous. */
+  discountPercent: number;
+  /** What the account is quoted in. The base currency when anonymous. */
+  currency: PricingCurrency | null;
 }
 
 export async function loadPricingContext(): Promise<PricingContext> {
   const session = await getSession();
+
+  // Read from the account rather than the cookie. The session is signed, so
+  // it could carry these safely, but a discount agreed this morning should
+  // apply on the next request rather than whenever the cookie is next
+  // reissued.
+  const client = session
+    ? await prisma.client.findUnique({
+        where: { id: session.userId },
+        select: { discountPercent: true, currency: true },
+      })
+    : null;
 
   const category = session?.categoryId
     ? await prisma.clientCategory.findUnique({ where: { id: session.categoryId } })
     : await prisma.clientCategory.findFirst({ where: { name: 'Retail' } });
 
   const rules = await prisma.markupRule.findMany({ where: { active: true } });
+
+  // Falls back to the base row so a deactivated currency cannot leave an
+  // account quoted at a rate nobody is maintaining.
+  const currency =
+    client?.currency && client.currency.active
+      ? {
+          code: client.currency.code,
+          symbol: client.currency.symbol,
+          rate: client.currency.rate,
+        }
+      : await loadBaseCurrency();
 
   return {
     category: category
@@ -34,7 +65,14 @@ export async function loadPricingContext(): Promise<PricingContext> {
     rules: rules as unknown as MarkupRule[],
     tierName: category?.name ?? 'Retail',
     isLoggedIn: !!session,
+    discountPercent: client?.discountPercent ?? 0,
+    currency,
   };
+}
+
+async function loadBaseCurrency(): Promise<PricingCurrency | null> {
+  const base = await prisma.currency.findFirst({ where: { isBase: true } });
+  return base ? { code: base.code, symbol: base.symbol, rate: base.rate } : null;
 }
 
 interface PriceableProduct {
@@ -60,6 +98,8 @@ export function priceFor(product: PriceableProduct, ctx: PricingContext): PriceR
       partNumber: product.partNumber,
       clientCategoryId: ctx.category.id,
       clientCategoryMarkupPercent: ctx.category.markupPercent,
+      discountPercent: ctx.discountPercent,
+      currency: ctx.currency ?? undefined,
     },
     ctx.rules
   );
