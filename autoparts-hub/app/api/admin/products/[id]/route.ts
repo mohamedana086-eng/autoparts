@@ -52,7 +52,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       manufacturer: true,
       vehicleSystem: true,
       supplier: true,
-      _count: { select: { interchanges: true } },
+      images: { orderBy: { sortOrder: 'asc' }, take: 1, select: { url: true } },
+      stock: { select: { quantity: true, reserved: true } },
+      _count: { select: { interchanges: true, images: true } },
     },
   });
 
@@ -84,7 +86,9 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
     );
   }
 
-  // Cross-references belong to the product, so they go with it.
+  // Cross-references belong to the product, so they go with it. Pictures,
+  // stock rows and basket lines are cleared by the database's own cascades —
+  // see the foreign keys in the inventory migration.
   await prisma.$transaction([
     prisma.interchange.deleteMany({ where: { sourceId: params.id } }),
     prisma.product.delete({ where: { id: params.id } }),

@@ -1,6 +1,19 @@
 import { Component, inject, signal } from '@angular/core';
 import { AdminService } from '../core/admin.service';
-import type { AdminProduct, ProductInput, TierRef } from '../core/admin.models';
+import type {
+  AdminProduct, ImageInput, ProductInput, StockRowInput, TierRef,
+} from '../core/admin.models';
+
+/** What a warehouse holding none of a part reads as in the editor. */
+interface StockCell {
+  quantity: number;
+  reserved: number;
+  binLocation: string;
+}
+
+/** Shared, never mutated — returning one object keeps the template from
+ *  rebinding an input on every change-detection pass. */
+const EMPTY_CELL: StockCell = { quantity: 0, reserved: 0, binLocation: '' };
 
 const BLANK: ProductInput = {
   partNumber: '',
@@ -137,6 +150,7 @@ const BLANK: ProductInput = {
         <table class="w-full text-sm min-w-[920px]">
           <thead>
             <tr class="table-head">
+              <th class="px-4 py-3 font-medium"><span class="sr-only">Picture</span></th>
               <th class="px-4 py-3 font-medium">Part number</th>
               <th class="px-4 py-3 font-medium">Name</th>
               <th class="px-4 py-3 font-medium">Brand</th>
@@ -144,6 +158,7 @@ const BLANK: ProductInput = {
               <th class="px-4 py-3 font-medium">Supplier</th>
               <th class="px-4 py-3 font-medium text-right">Purchase</th>
               <th class="px-4 py-3 font-medium">Delivery</th>
+              <th class="px-4 py-3 font-medium text-right">In stock</th>
               <th class="px-4 py-3 font-medium">Refs</th>
               <th class="px-4 py-3"></th>
             </tr>
@@ -151,6 +166,15 @@ const BLANK: ProductInput = {
           <tbody>
             @for (p of products(); track p.id) {
               <tr class="table-row">
+                <td class="px-4 py-3">
+                  @if (p.primaryImageUrl) {
+                    <img [src]="p.primaryImageUrl" [alt]="p.name" loading="lazy"
+                         class="w-9 h-9 rounded object-cover bg-ink-panel" />
+                  } @else {
+                    <span class="block w-9 h-9 rounded bg-ink-panel border border-ink-line"
+                          aria-label="No picture"></span>
+                  }
+                </td>
                 <td class="px-4 py-3 font-mono text-xs">{{ p.partNumber }}</td>
                 <td class="px-4 py-3">{{ p.name }}</td>
                 <td class="px-4 py-3 text-mute">{{ p.manufacturerName }}</td>
@@ -164,8 +188,31 @@ const BLANK: ProductInput = {
                 </td>
                 <td class="px-4 py-3 text-right font-mono">€{{ p.basePrice.toFixed(2) }}</td>
                 <td class="px-4 py-3 font-mono text-xs">{{ p.stockDays }}d</td>
+                <td class="px-4 py-3 text-right font-mono text-xs">
+                  <!-- Zero held is a real answer and reads differently from a
+                       part nobody has counted yet, so it is not dashed out. -->
+                  @if (p.stockOnHand === null) {
+                    <span class="text-mute">—</span>
+                  } @else if (p.stockOnHand === 0) {
+                    <span class="text-mute">0</span>
+                  } @else {
+                    <span class="text-stock">{{ p.stockAvailable }}</span>
+                    @if (p.stockAvailable !== p.stockOnHand) {
+                      <span class="text-mute"> / {{ p.stockOnHand }}</span>
+                    }
+                  }
+                </td>
                 <td class="px-4 py-3 font-mono text-xs text-mute">{{ p.interchangeCount }}</td>
                 <td class="px-4 py-3 text-right whitespace-nowrap">
+                  <button type="button" (click)="toggleInventory(p)"
+                          class="text-xs font-mono uppercase link-signal mr-3"
+                          [attr.aria-expanded]="expandedId() === p.id"
+                          [attr.aria-label]="'Pictures and stock for ' + p.partNumber">
+                    {{ expandedId() === p.id ? 'Close' : 'Stock' }}
+                    @if (p.imageCount > 0) {
+                      <span class="text-mute">({{ p.imageCount }})</span>
+                    }
+                  </button>
                   <button type="button" (click)="startEdit(p)"
                           class="text-xs font-mono uppercase link-signal mr-3"
                           [attr.aria-label]="'Edit ' + p.partNumber">Edit</button>
@@ -176,9 +223,109 @@ const BLANK: ProductInput = {
                   </button>
                 </td>
               </tr>
+
+              @if (expandedId() === p.id) {
+                <tr class="table-row">
+                  <td colspan="11" class="px-4 py-5 bg-ink-panel/50">
+                    @if (inventoryLoading()) {
+                      <div class="h-24 animate-pulse"></div>
+                    } @else {
+                      <div class="grid lg:grid-cols-2 gap-8">
+                        <!-- Pictures -->
+                        <div class="min-w-0">
+                          <p class="eyebrow mb-3">Pictures — the first one leads</p>
+
+                          @for (img of images(); track $index) {
+                            <div class="grid grid-cols-[1fr_1fr_auto] gap-2 mb-2 items-center">
+                              <input [value]="img.url" (input)="patchImage($index, 'url', $any($event.target).value)"
+                                     placeholder="https://… or /images/…"
+                                     [attr.aria-label]="'Image ' + ($index + 1) + ' url'"
+                                     class="field field-sm font-mono min-w-0" />
+                              <input [value]="img.alt" (input)="patchImage($index, 'alt', $any($event.target).value)"
+                                     placeholder="Describe it"
+                                     [attr.aria-label]="'Image ' + ($index + 1) + ' description'"
+                                     class="field field-sm min-w-0" />
+                              <span class="flex gap-1.5 whitespace-nowrap">
+                                <button type="button" (click)="moveImage($index, -1)" [disabled]="$index === 0"
+                                        class="text-xs font-mono text-mute hover:text-paper disabled:opacity-30 transition-colors"
+                                        [attr.aria-label]="'Move image ' + ($index + 1) + ' up'">↑</button>
+                                <button type="button" (click)="moveImage($index, 1)"
+                                        [disabled]="$index === images().length - 1"
+                                        class="text-xs font-mono text-mute hover:text-paper disabled:opacity-30 transition-colors"
+                                        [attr.aria-label]="'Move image ' + ($index + 1) + ' down'">↓</button>
+                                <button type="button" (click)="removeImage($index)"
+                                        class="text-xs font-mono text-mute hover:text-alert transition-colors"
+                                        [attr.aria-label]="'Remove image ' + ($index + 1)">✕</button>
+                              </span>
+                            </div>
+                          }
+                          @if (images().length === 0) {
+                            <p class="text-xs text-mute mb-2">No pictures on this part.</p>
+                          }
+
+                          <div class="flex items-center gap-3 mt-3">
+                            <button type="button" (click)="addImage()" class="text-sm btn-quiet">
+                              Add picture
+                            </button>
+                            <button type="button" (click)="saveImages(p)" [disabled]="savingImages()"
+                                    class="btn-primary text-sm px-4 py-1.5">
+                              {{ savingImages() ? 'Saving…' : 'Save pictures' }}
+                            </button>
+                          </div>
+                        </div>
+
+                        <!-- Stock -->
+                        <div class="min-w-0">
+                          <p class="eyebrow mb-3">Stock per warehouse</p>
+
+                          @if (warehouses().length === 0) {
+                            <p class="text-xs text-mute">
+                              No active warehouse to count into yet.
+                            </p>
+                          } @else {
+                            <div class="grid grid-cols-[1fr_5rem_5rem_1fr] gap-2 mb-1.5 text-[11px] text-mute">
+                              <span>Warehouse</span>
+                              <span class="text-right">On hand</span>
+                              <span class="text-right">Reserved</span>
+                              <span>Bin</span>
+                            </div>
+                            @for (w of warehouses(); track w.id) {
+                              <div class="grid grid-cols-[1fr_5rem_5rem_1fr] gap-2 mb-2 items-center">
+                                <span class="text-xs truncate min-w-0">{{ w.name }}</span>
+                                <input type="number" min="0" step="1" [value]="stockAt(w.id).quantity"
+                                       (input)="patchStock(w.id, 'quantity', $any($event.target).value)"
+                                       [attr.aria-label]="'On hand at ' + w.name"
+                                       class="field field-sm font-mono text-right min-w-0" />
+                                <input type="number" min="0" step="1" [value]="stockAt(w.id).reserved"
+                                       (input)="patchStock(w.id, 'reserved', $any($event.target).value)"
+                                       [attr.aria-label]="'Reserved at ' + w.name"
+                                       class="field field-sm font-mono text-right min-w-0" />
+                                <input [value]="stockAt(w.id).binLocation"
+                                       (input)="patchStock(w.id, 'binLocation', $any($event.target).value)"
+                                       [attr.aria-label]="'Bin at ' + w.name"
+                                       class="field field-sm font-mono min-w-0" />
+                              </div>
+                            }
+
+                            <div class="flex items-center gap-3 mt-3">
+                              <button type="button" (click)="saveStock(p)" [disabled]="savingStock()"
+                                      class="btn-primary text-sm px-4 py-1.5">
+                                {{ savingStock() ? 'Saving…' : 'Save stock' }}
+                              </button>
+                              <span class="text-[11px] text-mute">
+                                Available is on hand minus reserved.
+                              </span>
+                            </div>
+                          }
+                        </div>
+                      </div>
+                    }
+                  </td>
+                </tr>
+              }
             }
             @if (products().length === 0) {
-              <tr><td colspan="8" class="px-4 py-8 text-center text-mute text-sm">No products match that.</td></tr>
+              <tr><td colspan="11" class="px-4 py-8 text-center text-mute text-sm">No products match that.</td></tr>
             }
           </tbody>
         </table>
@@ -205,6 +352,19 @@ export class AdminProductsPage {
   protected readonly editingId = signal<string | null>(null);
   protected readonly form = signal<ProductInput>({ ...BLANK });
 
+  // ---------- Pictures and stock ----------
+  // One part is open at a time, so a single set of signals serves the panel
+  // rather than a per-row copy of every field.
+
+  protected readonly warehouses = signal<TierRef[]>([]);
+  protected readonly expandedId = signal<string | null>(null);
+  protected readonly inventoryLoading = signal(false);
+  protected readonly savingImages = signal(false);
+  protected readonly savingStock = signal(false);
+  protected readonly images = signal<ImageInput[]>([]);
+  /** Keyed by warehouse id — the editor shows a line per warehouse either way. */
+  protected readonly stock = signal<Record<string, StockCell>>({});
+
   constructor() {
     this.load();
   }
@@ -218,12 +378,172 @@ export class AdminProductsPage {
         this.manufacturers.set(res.manufacturers);
         this.systems.set(res.systems);
         this.suppliers.set(res.suppliers);
+        this.warehouses.set(res.warehouses);
         this.loading.set(false);
       })
       .catch(() => {
         this.error.set('Could not load products.');
         this.loading.set(false);
       });
+  }
+
+  protected toggleInventory(p: AdminProduct): void {
+    if (this.expandedId() === p.id) {
+      this.expandedId.set(null);
+      return;
+    }
+
+    this.expandedId.set(p.id);
+    this.error.set(null);
+    this.notice.set(null);
+    this.inventoryLoading.set(true);
+    this.images.set([]);
+    this.stock.set({});
+
+    Promise.all([this.admin.productImages(p.id), this.admin.productStock(p.id)])
+      .then(([pictures, levels]) => {
+        // Dropped if the admin closed the row or opened another while these
+        // were in flight — otherwise one part's stock lands under another's.
+        if (this.expandedId() !== p.id) return;
+
+        this.images.set(pictures.images.map((i) => ({ url: i.url, alt: i.alt ?? '' })));
+        this.stock.set(
+          Object.fromEntries(
+            levels.levels.map((l) => [
+              l.warehouseId,
+              { quantity: l.quantity, reserved: l.reserved, binLocation: l.binLocation ?? '' },
+            ])
+          )
+        );
+        this.inventoryLoading.set(false);
+      })
+      .catch(() => {
+        if (this.expandedId() !== p.id) return;
+        this.error.set('Could not load pictures and stock for that part.');
+        this.inventoryLoading.set(false);
+      });
+  }
+
+  protected stockAt(warehouseId: string): StockCell {
+    return this.stock()[warehouseId] ?? EMPTY_CELL;
+  }
+
+  protected patchStock(warehouseId: string, key: keyof StockCell, value: string): void {
+    this.stock.update((rows) => {
+      const current = rows[warehouseId] ?? EMPTY_CELL;
+      const next: StockCell =
+        key === 'binLocation'
+          ? { ...current, binLocation: value }
+          : { ...current, [key]: Math.max(0, Math.trunc(Number(value) || 0)) };
+      return { ...rows, [warehouseId]: next };
+    });
+  }
+
+  protected addImage(): void {
+    this.images.update((list) => [...list, { url: '', alt: '' }]);
+  }
+
+  protected removeImage(index: number): void {
+    this.images.update((list) => list.filter((_, i) => i !== index));
+  }
+
+  protected patchImage(index: number, key: keyof ImageInput, value: string): void {
+    this.images.update((list) =>
+      list.map((img, i) => (i === index ? { ...img, [key]: value } : img))
+    );
+  }
+
+  /** Position is what makes a picture the primary one, so this is the only
+   *  way to promote one. */
+  protected moveImage(index: number, delta: number): void {
+    this.images.update((list) => {
+      const target = index + delta;
+      if (target < 0 || target >= list.length) return list;
+      const next = [...list];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  }
+
+  protected async saveImages(p: AdminProduct): Promise<void> {
+    if (this.savingImages()) return;
+
+    this.savingImages.set(true);
+    this.error.set(null);
+    this.notice.set(null);
+    try {
+      // A row left blank is one the admin added and did not fill in, not a
+      // request to save an empty url the API would refuse.
+      const rows = this.images().filter((img) => img.url.trim());
+      const res = await this.admin.saveProductImages(p.id, rows);
+      this.images.set(res.images.map((i) => ({ url: i.url, alt: i.alt ?? '' })));
+      this.notice.set(
+        `${p.partNumber}: ${res.images.length} picture${res.images.length === 1 ? '' : 's'} saved.`
+      );
+
+      // Keep the row's thumbnail and count honest without refetching the list.
+      this.products.update((list) =>
+        list.map((row) =>
+          row.id === p.id
+            ? {
+                ...row,
+                imageCount: res.images.length,
+                primaryImageUrl: res.images[0]?.url ?? null,
+              }
+            : row
+        )
+      );
+    } catch (err: any) {
+      this.error.set(err?.error?.error ?? 'Could not save those pictures.');
+    } finally {
+      this.savingImages.set(false);
+    }
+  }
+
+  protected async saveStock(p: AdminProduct): Promise<void> {
+    if (this.savingStock()) return;
+
+    this.savingStock.set(true);
+    this.error.set(null);
+    this.notice.set(null);
+    try {
+      // Only warehouses with something to say. Sending every warehouse at zero
+      // would write a row per site claiming it was counted — see the API,
+      // where a warehouse left out is one that holds none.
+      const rows: StockRowInput[] = Object.entries(this.stock())
+        .filter(([, cell]) => cell.quantity > 0 || cell.reserved > 0 || cell.binLocation.trim())
+        .map(([warehouseId, cell]) => ({
+          warehouseId,
+          quantity: cell.quantity,
+          reserved: cell.reserved,
+          binLocation: cell.binLocation.trim(),
+        }));
+
+      const res = await this.admin.saveProductStock(p.id, rows);
+      this.stock.set(
+        Object.fromEntries(
+          res.levels.map((l) => [
+            l.warehouseId,
+            { quantity: l.quantity, reserved: l.reserved, binLocation: l.binLocation ?? '' },
+          ])
+        )
+      );
+
+      const onHand = res.levels.reduce((sum, l) => sum + l.quantity, 0);
+      const available = res.levels.reduce((sum, l) => sum + l.available, 0);
+      this.products.update((list) =>
+        list.map((row) =>
+          row.id === p.id ? { ...row, stockOnHand: onHand, stockAvailable: available } : row
+        )
+      );
+      this.notice.set(`${p.partNumber}: ${onHand} on hand across ${res.levels.length} warehouse${
+        res.levels.length === 1 ? '' : 's'
+      }.`);
+    } catch (err: any) {
+      this.error.set(err?.error?.error ?? 'Could not save that stock.');
+    } finally {
+      this.savingStock.set(false);
+    }
   }
 
   protected patch<K extends keyof ProductInput>(key: K, value: string): void {

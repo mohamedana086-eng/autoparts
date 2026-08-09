@@ -59,6 +59,14 @@ export class AdminLayout {
       ],
     },
     {
+      heading: 'Inventory',
+      adminOnly: true,
+      items: [
+        { path: '/admin/warehouses', label: 'Warehouses', exact: false },
+        { path: '/admin/outlets', label: 'Retail outlets', exact: false },
+      ],
+    },
+    {
       heading: 'Customers',
       adminOnly: false,
       items: [
@@ -75,7 +83,13 @@ export class AdminLayout {
     {
       heading: 'Sales',
       adminOnly: false,
-      items: [{ path: '/admin/orders', label: 'Orders', exact: false }],
+      items: [
+        { path: '/admin/orders', label: 'Orders', exact: false },
+        // Scoped to a salesperson's own customers by the API, the same way the
+        // customer list is, so it is not admin-only.
+        { path: '/admin/carts', label: 'Open baskets', exact: false },
+        { path: '/admin/notifications', label: 'Notifications', exact: false, adminOnly: true },
+      ],
     },
   ];
 

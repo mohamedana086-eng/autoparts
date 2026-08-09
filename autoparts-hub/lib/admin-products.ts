@@ -69,14 +69,71 @@ export function readProductInput(body: Record<string, unknown>):
   };
 }
 
+export interface ImageInput {
+  url: string;
+  alt: string | null;
+}
+
+/**
+ * Validates the whole picture list for one part, in display order.
+ *
+ * Submitted as an ordered set rather than one image at a time because order
+ * is the only thing that says which picture leads — see ProductImage in the
+ * schema. Reordering is then the same request as adding, and there is no
+ * moment where two images both claim to be first.
+ */
+export function readImageRows(body: Record<string, unknown>):
+  | { ok: true; value: ImageInput[] }
+  | { ok: false; error: string } {
+  const raw = body.images;
+  if (!Array.isArray(raw)) return { ok: false, error: 'Expected a list of images.' };
+  if (raw.length > 12) return { ok: false, error: 'A part can carry at most 12 pictures.' };
+
+  const rows: ImageInput[] = [];
+
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') {
+      return { ok: false, error: 'Every image must be an object.' };
+    }
+    const row = entry as Record<string, unknown>;
+    const url = String(row.url ?? '').trim();
+    if (!url) return { ok: false, error: 'Every image needs a url.' };
+
+    // http(s) or a site-relative path. Anything else — data:, javascript:,
+    // blob: — ends up in an <img src> on a public page, so it is refused here
+    // rather than sanitised at each of the places that render it.
+    const allowed = /^https?:\/\//i.test(url) || url.startsWith('/');
+    if (!allowed) {
+      return { ok: false, error: 'An image url must start with http://, https:// or /.' };
+    }
+    if (url.length > 2048) return { ok: false, error: 'That image url is too long.' };
+
+    const alt = String(row.alt ?? '').trim();
+    rows.push({ url, alt: alt || null });
+  }
+
+  return { ok: true, value: rows };
+}
+
+export function serialiseImage(i: {
+  id: string; url: string; alt: string | null; sortOrder: number;
+}) {
+  return { id: i.id, url: i.url, alt: i.alt, sortOrder: i.sortOrder };
+}
+
 export function serialiseProduct(p: {
   id: string; partNumber: string; name: string; description: string | null;
   basePrice: number; stockDays: number; manufacturerId: string; vehicleSystemId: string;
   supplierId?: string | null;
   manufacturer?: { name: string }; vehicleSystem?: { name: string };
   supplier?: { name: string } | null;
-  _count?: { interchanges: number };
+  images?: { url: string }[];
+  stock?: { quantity: number; reserved: number }[];
+  _count?: { interchanges: number; images?: number };
 }) {
+  const onHand = (p.stock ?? []).reduce((sum, s) => sum + s.quantity, 0);
+  const reserved = (p.stock ?? []).reduce((sum, s) => sum + s.reserved, 0);
+
   return {
     id: p.id,
     partNumber: p.partNumber,
@@ -91,5 +148,15 @@ export function serialiseProduct(p: {
     supplierId: p.supplierId ?? null,
     supplierName: p.supplier?.name ?? null,
     interchangeCount: p._count?.interchanges ?? 0,
+    imageCount: p._count?.images ?? 0,
+    /** The lowest-ordered picture, for the thumbnail in the list. */
+    primaryImageUrl: p.images?.[0]?.url ?? null,
+    /**
+     * Summed across every warehouse. Null when the caller did not ask for
+     * stock, which is not the same as a part nobody holds any of — the list
+     * must be able to tell "none in stock" from "not counted here".
+     */
+    stockOnHand: p.stock ? onHand : null,
+    stockAvailable: p.stock ? onHand - reserved : null,
   };
 }

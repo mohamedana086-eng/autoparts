@@ -88,7 +88,28 @@ model Product {
   interchanges   Interchange[] @relation("SourcePart")
   fitments       Fitment[]
   orderItems     OrderItem[]
+  images         ProductImage[]
+  stock          StockLevel[]
+  cartItems      CartItem[]
   createdAt      DateTime      @default(now())
+}
+
+/// A picture of a part.
+///
+/// Order alone decides which one leads — the first is the primary. A separate
+/// `isPrimary` flag would be a second column saying the same thing, and the
+/// two could disagree; the supplier table already avoids that shape.
+model ProductImage {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+  /// Alternative text. Null falls back to the part's name where it is shown.
+  alt       String?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([productId, sortOrder])
 }
 
 // cross-reference: which part numbers are interchangeable with which
@@ -240,6 +261,133 @@ model Client {
   salesManagerId   String?
   salesManager     Client?         @relation("SalesManaged", fields: [salesManagerId], references: [id])
   managedClients   Client[]        @relation("SalesManaged")
+
+  cart             Cart?
+  notifications    Notification[]
+}
+
+// ---------- Inventory ----------
+
+/// A place stock is held.
+///
+/// Not the same thing as a supplier: a supplier is who a part is bought from,
+/// a warehouse is where the ones already bought sit. A part can come from one
+/// supplier and be spread across several warehouses.
+model Warehouse {
+  id        String         @id @default(cuid())
+  code      String         @unique // EU1, EG1
+  name      String
+  city      String?
+  address   String?
+  /// Whether it can be picked from. Closing one deactivates it rather than
+  /// deleting it, so its stock rows and the outlets it serves survive.
+  active    Boolean        @default(true)
+  /// Which warehouse to draw from first when nothing says which. Higher wins.
+  priority  Int            @default(0)
+  stock     StockLevel[]
+  outlets   RetailOutlet[]
+  createdAt DateTime       @default(now())
+}
+
+/// How many of one part sit in one warehouse.
+///
+/// A row per (part, warehouse) rather than a quantity column on Product. The
+/// catalogue has never carried a quantity at all, and putting one on the part
+/// would force a single total no individual warehouse could be held to.
+model StockLevel {
+  id          String    @id @default(cuid())
+  productId   String
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  warehouseId String
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  quantity    Int       @default(0)
+  /// Committed to orders that have not shipped. What is sellable is
+  /// `quantity - reserved`, so counting the shelf and promising stock stay two
+  /// separate facts and neither has to be reconstructed from the other.
+  reserved    Int       @default(0)
+  /// Where on the shelf. Free text — aisle and bay schemes differ per site,
+  /// and nothing queries it.
+  binLocation String?
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([productId, warehouseId])
+  @@index([warehouseId])
+}
+
+/// A counter a customer can walk into or collect an order from.
+model RetailOutlet {
+  id          String     @id @default(cuid())
+  code        String     @unique
+  name        String
+  city        String?
+  address     String?
+  phone       String?
+  /// The warehouse that supplies it. Null while that is not settled — an
+  /// outlet gets opened before its logistics are agreed.
+  warehouseId String?
+  warehouse   Warehouse? @relation(fields: [warehouseId], references: [id])
+  active      Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+
+  @@index([warehouseId])
+}
+
+// ---------- Basket ----------
+
+/// A customer's saved basket.
+///
+/// The Angular cart lives in localStorage and still does; this is the copy on
+/// the server, so a basket survives a new device and staff can see what is
+/// sitting unordered. It deliberately stores no prices: what a line costs is
+/// resolved at checkout from the catalogue and the caller's tier, which is
+/// what stops a stale or tampered basket deciding what it pays.
+model Cart {
+  id        String     @id @default(cuid())
+  clientId  String     @unique
+  client    Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  items     CartItem[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model CartItem {
+  id        String   @id @default(cuid())
+  cartId    String
+  cart      Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity  Int      @default(1)
+  addedAt   DateTime @default(now())
+
+  @@unique([cartId, productId])
+  @@index([productId])
+}
+
+// ---------- Notifications ----------
+
+/// Something one account should be told about.
+///
+/// Addressed to a Client, which is how staff are stored too — so one table
+/// serves "your order shipped" to a customer and "a part ran out" to an
+/// admin, without inventing a second kind of recipient.
+model Notification {
+  id        String    @id @default(cuid())
+  clientId  String
+  client    Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  /// order | stock | account | system. A string for the same reason Role is —
+  /// the connector stays portable and the app narrows it.
+  type      String    @default("system")
+  title     String
+  body      String?
+  /// Where clicking it goes, e.g. /orders. Null when there is nowhere to go.
+  link      String?
+  /// When it was read. A timestamp rather than a boolean: "unread" is the
+  /// null case either way, and this keeps when they saw it, which a flag
+  /// throws away.
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([clientId, readAt])
 }
 
 // ---------- Complex markup engine ----------

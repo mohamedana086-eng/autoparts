@@ -126,6 +126,13 @@ export interface AdminProduct {
   supplierId: string | null;
   supplierName: string | null;
   interchangeCount: number;
+  imageCount: number;
+  /** The leading picture, for the list thumbnail. Null when there are none. */
+  primaryImageUrl: string | null;
+  /** Summed across warehouses. Null means the caller did not ask for stock —
+   *  not the same as holding none. */
+  stockOnHand: number | null;
+  stockAvailable: number | null;
 }
 
 export interface ProductInput {
@@ -145,6 +152,152 @@ export interface ProductsResponse {
   manufacturers: TierRef[];
   systems: TierRef[];
   suppliers: TierRef[];
+  /** Active warehouses, so the stock editor has somewhere to put a first count. */
+  warehouses: TierRef[];
+}
+
+// ---------- Pictures ----------
+
+export interface ProductImage {
+  id: string;
+  url: string;
+  alt: string | null;
+  sortOrder: number;
+}
+
+/** What the editor submits. Position in the array is the display order. */
+export interface ImageInput {
+  url: string;
+  alt: string;
+}
+
+// ---------- Inventory ----------
+
+export interface AdminWarehouse {
+  id: string;
+  code: string;
+  name: string;
+  city: string | null;
+  address: string | null;
+  active: boolean;
+  /** Which warehouse is drawn from first when nothing says which. Higher wins. */
+  priority: number;
+  outletCount: number;
+  /** Distinct parts held here, not units. */
+  skuCount: number;
+  totalQuantity: number;
+  totalReserved: number;
+}
+
+export interface WarehouseInput {
+  code: string;
+  name: string;
+  city: string;
+  address: string;
+  active: boolean;
+  priority: number;
+}
+
+export interface StockLevel {
+  id: string;
+  warehouseId: string;
+  warehouseName: string | null;
+  warehouseCode: string | null;
+  quantity: number;
+  reserved: number;
+  /** quantity − reserved. Derived by the API, never stored. */
+  available: number;
+  binLocation: string | null;
+  updatedAt: string;
+}
+
+/** One row of the stock editor. Sent as a set — see the API. */
+export interface StockRowInput {
+  warehouseId: string;
+  quantity: number;
+  reserved: number;
+  binLocation: string;
+}
+
+export interface AdminOutlet {
+  id: string;
+  code: string;
+  name: string;
+  city: string | null;
+  address: string | null;
+  phone: string | null;
+  warehouseId: string | null;
+  warehouseName: string | null;
+  warehouseCode: string | null;
+  active: boolean;
+}
+
+export interface OutletInput {
+  code: string;
+  name: string;
+  city: string;
+  address: string;
+  phone: string;
+  warehouseId: string | null;
+  active: boolean;
+}
+
+export interface OutletsResponse {
+  outlets: AdminOutlet[];
+  warehouses: TierRef[];
+}
+
+// ---------- Open baskets ----------
+
+export interface AdminCartItem {
+  productId: string;
+  partNumber: string;
+  name: string;
+  quantity: number;
+}
+
+export interface AdminCart {
+  id: string;
+  clientId: string;
+  clientName: string;
+  clientEmail: string;
+  updatedAt: string;
+  units: number;
+  /** Purchase cost of the lines, not what the customer would be quoted. */
+  cost: number;
+  items: AdminCartItem[];
+}
+
+// ---------- Notifications ----------
+
+export const NOTIFICATION_TYPES = ['system', 'order', 'stock', 'account'] as const;
+
+export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
+
+export interface AdminNotification {
+  id: string;
+  clientId: string;
+  clientName: string;
+  type: string;
+  title: string;
+  body: string | null;
+  link: string | null;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export interface NotificationInput {
+  clientId: string;
+  type: string;
+  title: string;
+  body: string;
+  /** A path on this site. The API refuses anything off-site. */
+  link: string;
+}
+
+export interface NotificationsResponse {
+  notifications: AdminNotification[];
+  recipients: TierRef[];
 }
 
 /** What the trading relationship is. Distinct from `rating`, which is how

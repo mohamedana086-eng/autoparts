@@ -2,9 +2,11 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import type {
-  AdminClient, AdminCurrency, AdminOrder, AdminProduct, AdminStats, AdminSupplier, ClientCategory,
-  ClientInput, ClientsResponse, CurrencyInput, MarkupRule, MarkupRulesResponse, ProductInput,
-  ProductsResponse, SupplierInput, SuppliersResponse, TierRef,
+  AdminCart, AdminClient, AdminCurrency, AdminNotification, AdminOrder, AdminOutlet, AdminProduct,
+  AdminStats, AdminSupplier, AdminWarehouse, ClientCategory, ClientInput, ClientsResponse,
+  CurrencyInput, ImageInput, MarkupRule, MarkupRulesResponse, NotificationInput,
+  NotificationsResponse, OutletInput, OutletsResponse, ProductImage, ProductInput, ProductsResponse,
+  StockLevel, StockRowInput, SupplierInput, SuppliersResponse, TierRef, WarehouseInput,
 } from './admin.models';
 
 /**
@@ -145,5 +147,97 @@ export class AdminService {
 
   deleteSupplier(id: string): Promise<{ ok: boolean }> {
     return firstValueFrom(this.http.delete<{ ok: boolean }>(`/api/admin/suppliers/${id}`));
+  }
+
+  // ---------- Pictures ----------
+
+  productImages(productId: string): Promise<{ images: ProductImage[] }> {
+    return firstValueFrom(
+      this.http.get<{ images: ProductImage[] }>(`/api/admin/products/${productId}/images`)
+    );
+  }
+
+  /** Replaces the whole list. Array position becomes the display order. */
+  saveProductImages(productId: string, images: ImageInput[]): Promise<{ images: ProductImage[] }> {
+    return firstValueFrom(
+      this.http.put<{ images: ProductImage[] }>(`/api/admin/products/${productId}/images`, { images })
+    );
+  }
+
+  // ---------- Stock ----------
+
+  productStock(productId: string): Promise<{ levels: StockLevel[] }> {
+    return firstValueFrom(
+      this.http.get<{ levels: StockLevel[] }>(`/api/admin/products/${productId}/stock`)
+    );
+  }
+
+  /** Replaces this part's counts. A warehouse left out holds none. */
+  saveProductStock(productId: string, levels: StockRowInput[]): Promise<{ levels: StockLevel[] }> {
+    return firstValueFrom(
+      this.http.put<{ levels: StockLevel[] }>(`/api/admin/products/${productId}/stock`, { levels })
+    );
+  }
+
+  // ---------- Warehouses ----------
+
+  warehouses(): Promise<{ warehouses: AdminWarehouse[] }> {
+    return firstValueFrom(this.http.get<{ warehouses: AdminWarehouse[] }>('/api/admin/warehouses'));
+  }
+
+  createWarehouse(input: WarehouseInput): Promise<{ warehouse: AdminWarehouse }> {
+    return firstValueFrom(
+      this.http.post<{ warehouse: AdminWarehouse }>('/api/admin/warehouses', input)
+    );
+  }
+
+  updateWarehouse(id: string, input: WarehouseInput): Promise<{ warehouse: AdminWarehouse }> {
+    return firstValueFrom(
+      this.http.patch<{ warehouse: AdminWarehouse }>(`/api/admin/warehouses/${id}`, input)
+    );
+  }
+
+  deleteWarehouse(id: string): Promise<{ ok: boolean; orphanedOutlets: number }> {
+    return firstValueFrom(
+      this.http.delete<{ ok: boolean; orphanedOutlets: number }>(`/api/admin/warehouses/${id}`)
+    );
+  }
+
+  // ---------- Outlets ----------
+
+  outlets(): Promise<OutletsResponse> {
+    return firstValueFrom(this.http.get<OutletsResponse>('/api/admin/outlets'));
+  }
+
+  createOutlet(input: OutletInput): Promise<{ outlet: AdminOutlet }> {
+    return firstValueFrom(this.http.post<{ outlet: AdminOutlet }>('/api/admin/outlets', input));
+  }
+
+  updateOutlet(id: string, input: OutletInput): Promise<{ outlet: AdminOutlet }> {
+    return firstValueFrom(
+      this.http.patch<{ outlet: AdminOutlet }>(`/api/admin/outlets/${id}`, input)
+    );
+  }
+
+  deleteOutlet(id: string): Promise<{ ok: boolean }> {
+    return firstValueFrom(this.http.delete<{ ok: boolean }>(`/api/admin/outlets/${id}`));
+  }
+
+  // ---------- Open baskets ----------
+
+  carts(): Promise<{ carts: AdminCart[] }> {
+    return firstValueFrom(this.http.get<{ carts: AdminCart[] }>('/api/admin/carts'));
+  }
+
+  // ---------- Notifications ----------
+
+  notifications(): Promise<NotificationsResponse> {
+    return firstValueFrom(this.http.get<NotificationsResponse>('/api/admin/notifications'));
+  }
+
+  sendNotification(input: NotificationInput): Promise<{ notification: AdminNotification }> {
+    return firstValueFrom(
+      this.http.post<{ notification: AdminNotification }>('/api/admin/notifications', input)
+    );
   }
 }

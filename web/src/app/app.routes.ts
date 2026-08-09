@@ -26,6 +26,20 @@ export const routes: Routes = [
         loadComponent: () => import('./admin/suppliers.page').then((m) => m.AdminSuppliersPage),
       },
       {
+        path: 'warehouses',
+        loadComponent: () => import('./admin/warehouses.page').then((m) => m.AdminWarehousesPage),
+      },
+      {
+        path: 'outlets',
+        loadComponent: () => import('./admin/outlets.page').then((m) => m.AdminOutletsPage),
+      },
+      { path: 'carts', loadComponent: () => import('./admin/carts.page').then((m) => m.AdminCartsPage) },
+      {
+        path: 'notifications',
+        loadComponent: () =>
+          import('./admin/notifications.page').then((m) => m.AdminNotificationsPage),
+      },
+      {
         path: 'client-categories',
         loadComponent: () => import('./admin/client-categories.page').then((m) => m.AdminClientCategoriesPage),
       },

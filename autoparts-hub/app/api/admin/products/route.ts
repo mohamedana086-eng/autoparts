@@ -31,7 +31,11 @@ export async function GET(req: NextRequest) {
         manufacturer: true,
         vehicleSystem: true,
         supplier: true,
-        _count: { select: { interchanges: true } },
+        // Just the leading picture: the list shows one thumbnail, and pulling
+        // every image for 300 rows to display one of each is wasted work.
+        images: { orderBy: { sortOrder: 'asc' }, take: 1, select: { url: true } },
+        stock: { select: { quantity: true, reserved: true } },
+        _count: { select: { interchanges: true, images: true } },
       },
       orderBy: [{ vehicleSystem: { order: 'asc' } }, { partNumber: 'asc' }],
       take: 300,
@@ -41,11 +45,20 @@ export async function GET(req: NextRequest) {
     prisma.supplier.findMany({ orderBy: { name: 'asc' } }),
   ]);
 
+  // The stock editor needs somewhere to put a count even when no part is held
+  // anywhere yet, so the warehouse list travels with the catalogue rather than
+  // being fetched again the first time a row is expanded.
+  const warehouses = await prisma.warehouse.findMany({
+    where: { active: true },
+    orderBy: [{ priority: 'desc' }, { code: 'asc' }],
+  });
+
   return NextResponse.json({
     products: products.map(serialiseProduct),
     manufacturers: manufacturers.map((m) => ({ id: m.id, name: m.name })),
     systems: systems.map((s) => ({ id: s.id, name: s.name })),
     suppliers: suppliers.map((s) => ({ id: s.id, name: s.name })),
+    warehouses: warehouses.map((w) => ({ id: w.id, name: `${w.code} — ${w.name}` })),
   });
 }
 
@@ -97,7 +110,11 @@ export async function POST(req: NextRequest) {
       manufacturer: true,
       vehicleSystem: true,
       supplier: true,
-      _count: { select: { interchanges: true } },
+      // Empty on something just created, but included so a created row and a
+      // listed one are the same shape and the table needs no special case.
+      images: { orderBy: { sortOrder: 'asc' }, take: 1, select: { url: true } },
+      stock: { select: { quantity: true, reserved: true } },
+      _count: { select: { interchanges: true, images: true } },
     },
   });
 
