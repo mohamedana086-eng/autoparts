@@ -6,7 +6,12 @@ import { AuthService } from '../core/auth.service';
   selector: 'app-admin-layout',
   imports: [RouterOutlet, RouterLink, RouterLinkActive],
   template: `
-    <div class="max-w-7xl mx-auto px-6 py-8 grid md:grid-cols-[220px_1fr] gap-8">
+    <!-- minmax(0,1fr), not 1fr: a bare 1fr floors at the content's min-content
+         width, so a wide table stretched this column past the page and the
+         whole admin scrolled sideways while the table's own overflow-x
+         wrapper sat unused. Allowing the column to shrink puts the scrolling
+         back where it belongs — inside the table. -->
+    <div class="max-w-7xl mx-auto px-6 py-8 grid md:grid-cols-[220px_minmax(0,1fr)] gap-8">
       <aside>
         <p class="font-display font-bold text-sm mb-4 text-mute uppercase tracking-widest">Admin panel</p>
         <nav class="grid gap-4">

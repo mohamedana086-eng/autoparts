@@ -5,10 +5,10 @@ import type { ClientCategory } from '../core/admin.models';
 @Component({
   selector: 'app-admin-client-categories',
   template: `
-    <h1 class="font-display text-2xl font-bold mb-1">Client categories</h1>
-    <p class="text-sm text-mute mb-6">
-      Each client belongs to one category, which sets the default markup applied when no
-      more specific markup rule matches.
+    <h1 class="font-display text-2xl font-bold mb-1">Categories &amp; price lists</h1>
+    <p class="text-sm text-mute mb-6 max-w-2xl">
+      A customer belongs to one category, and it is their price list: it sets the default
+      markup used when no more specific markup rule matches them.
     </p>
 
     @if (error()) {
@@ -18,10 +18,10 @@ import type { ClientCategory } from '../core/admin.models';
     @if (loading()) {
       <div class="panel h-40 animate-pulse mb-8"></div>
     } @else {
-      <div class="border border-ink-line rounded-plate overflow-x-auto mb-8">
+      <div class="table-wrap mb-8">
         <table class="w-full text-sm min-w-[640px]">
           <thead>
-            <tr class="bg-ink-panel text-mute text-xs uppercase tracking-wider text-left">
+            <tr class="table-head">
               <th class="px-4 py-3 font-medium">Category</th>
               <th class="px-4 py-3 font-medium">Markup %</th>
               <th class="px-4 py-3 font-medium">Min. order</th>
@@ -32,7 +32,7 @@ import type { ClientCategory } from '../core/admin.models';
           </thead>
           <tbody>
             @for (c of categories(); track c.id) {
-              <tr class="border-t border-ink-line hover:bg-ink-panel/60">
+              <tr class="table-row">
                 <td class="px-4 py-3 font-medium">{{ c.name }}</td>
                 <td class="px-4 py-3 font-mono text-signal">{{ c.markupPercent }}%</td>
                 <td class="px-4 py-3 font-mono">€{{ c.minOrderAmount.toFixed(2) }}</td>

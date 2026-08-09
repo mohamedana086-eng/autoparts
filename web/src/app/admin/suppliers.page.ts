@@ -176,10 +176,10 @@ const BLANK: SupplierInput = {
     @if (loading()) {
       <div class="panel h-40 animate-pulse"></div>
     } @else {
-      <div class="border border-ink-line rounded-plate overflow-x-auto">
-        <table class="w-full text-sm min-w-[760px]">
+      <div class="table-wrap">
+        <table class="w-full text-sm min-w-[1120px]">
           <thead>
-            <tr class="bg-ink-panel text-mute text-xs uppercase tracking-wider text-left">
+            <tr class="table-head">
               <th class="px-4 py-3 font-medium">Supplier</th>
               <th class="px-4 py-3 font-medium">Code</th>
               <th class="px-4 py-3 font-medium">Type</th>
@@ -194,7 +194,7 @@ const BLANK: SupplierInput = {
           </thead>
           <tbody>
             @for (s of suppliers(); track s.id) {
-              <tr class="border-t border-ink-line hover:bg-ink-panel/60">
+              <tr class="table-row">
                 <td class="px-4 py-3">
                   <span class="font-medium">{{ s.name }}</span>
                   <span class="block text-xs text-mute font-mono">/supplier/{{ s.slug }}</span>

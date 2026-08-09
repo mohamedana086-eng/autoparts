@@ -63,6 +63,19 @@
     @apply border-t-0 pt-0 mt-0;
   }
 
+  /* A data table and its scroll container. The wrapper is what scrolls, which
+   * only works if the grid column it sits in is allowed to shrink — see the
+   * minmax(0,1fr) in the admin layout. */
+  .table-wrap {
+    @apply border border-ink-line rounded-plate overflow-x-auto;
+  }
+  .table-head {
+    @apply bg-ink-panel text-mute text-xs uppercase tracking-wider text-left;
+  }
+  .table-row {
+    @apply border-t border-ink-line hover:bg-ink-panel/60;
+  }
+
   /* Callouts. */
   .note {
     @apply border rounded-plate px-3 py-2 text-sm;

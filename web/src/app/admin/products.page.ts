@@ -133,14 +133,15 @@ const BLANK: ProductInput = {
     @if (loading()) {
       <div class="panel h-40 animate-pulse"></div>
     } @else {
-      <div class="border border-ink-line rounded-plate overflow-x-auto">
-        <table class="w-full text-sm min-w-[820px]">
+      <div class="table-wrap">
+        <table class="w-full text-sm min-w-[920px]">
           <thead>
-            <tr class="bg-ink-panel text-mute text-xs uppercase tracking-wider text-left">
+            <tr class="table-head">
               <th class="px-4 py-3 font-medium">Part number</th>
               <th class="px-4 py-3 font-medium">Name</th>
               <th class="px-4 py-3 font-medium">Brand</th>
               <th class="px-4 py-3 font-medium">System</th>
+              <th class="px-4 py-3 font-medium">Supplier</th>
               <th class="px-4 py-3 font-medium text-right">Purchase</th>
               <th class="px-4 py-3 font-medium">Delivery</th>
               <th class="px-4 py-3 font-medium">Refs</th>
@@ -149,11 +150,18 @@ const BLANK: ProductInput = {
           </thead>
           <tbody>
             @for (p of products(); track p.id) {
-              <tr class="border-t border-ink-line hover:bg-ink-panel/60">
+              <tr class="table-row">
                 <td class="px-4 py-3 font-mono text-xs">{{ p.partNumber }}</td>
                 <td class="px-4 py-3">{{ p.name }}</td>
                 <td class="px-4 py-3 text-mute">{{ p.manufacturerName }}</td>
                 <td class="px-4 py-3 text-mute">{{ p.systemName }}</td>
+                <td class="px-4 py-3 text-xs">
+                  @if (p.supplierName) {
+                    {{ p.supplierName }}
+                  } @else {
+                    <span class="text-mute">— unsourced —</span>
+                  }
+                </td>
                 <td class="px-4 py-3 text-right font-mono">€{{ p.basePrice.toFixed(2) }}</td>
                 <td class="px-4 py-3 font-mono text-xs">{{ p.stockDays }}d</td>
                 <td class="px-4 py-3 font-mono text-xs text-mute">{{ p.interchangeCount }}</td>

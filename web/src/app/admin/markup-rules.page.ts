@@ -20,10 +20,10 @@ import type { MarkupRule, TierRef } from '../core/admin.models';
     @if (loading()) {
       <div class="panel h-40 animate-pulse mb-8"></div>
     } @else {
-      <div class="border border-ink-line rounded-plate overflow-x-auto mb-8">
+      <div class="table-wrap mb-8">
         <table class="w-full text-sm min-w-[900px]">
           <thead>
-            <tr class="bg-ink-panel text-mute text-xs uppercase tracking-wider text-left">
+            <tr class="table-head">
               <th class="px-4 py-3 font-medium">Label</th>
               <th class="px-4 py-3 font-medium">Category</th>
               <th class="px-4 py-3 font-medium">Supplier</th>
@@ -37,7 +37,7 @@ import type { MarkupRule, TierRef } from '../core/admin.models';
           </thead>
           <tbody>
             @for (r of rules(); track r.id) {
-              <tr class="border-t border-ink-line hover:bg-ink-panel/60">
+              <tr class="table-row">
                 <td class="px-4 py-3 font-medium">{{ r.label }}</td>
                 <td class="px-4 py-3 text-mute">{{ r.clientCategoryName ?? 'any' }}</td>
                 <td class="px-4 py-3 text-mute">{{ r.supplierName ?? 'any' }}</td>

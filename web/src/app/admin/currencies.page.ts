@@ -88,10 +88,10 @@ const BLANK: CurrencyInput = { code: '', name: '', symbol: '', rate: 1, active: 
     @if (loading()) {
       <div class="panel h-40 animate-pulse"></div>
     } @else {
-      <div class="border border-ink-line rounded-plate overflow-x-auto">
+      <div class="table-wrap">
         <table class="w-full text-sm min-w-[680px]">
           <thead>
-            <tr class="bg-ink-panel text-mute text-xs uppercase tracking-wider text-left">
+            <tr class="table-head">
               <th class="px-4 py-3 font-medium">Code</th>
               <th class="px-4 py-3 font-medium">Name</th>
               <th class="px-4 py-3 font-medium text-right">Rate</th>
@@ -102,7 +102,7 @@ const BLANK: CurrencyInput = { code: '', name: '', symbol: '', rate: 1, active: 
           </thead>
           <tbody>
             @for (c of currencies(); track c.id) {
-              <tr class="border-t border-ink-line hover:bg-ink-panel/60">
+              <tr class="table-row">
                 <td class="px-4 py-3">
                   <span class="font-mono font-medium">{{ c.code }}</span>
                   <span class="text-mute ml-1">{{ c.symbol }}</span>

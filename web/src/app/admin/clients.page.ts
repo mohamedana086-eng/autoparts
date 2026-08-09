@@ -5,10 +5,11 @@ import type { AdminClient, ClientInput, TierRef } from '../core/admin.models';
 @Component({
   selector: 'app-admin-clients',
   template: `
-    <h1 class="font-display text-2xl font-bold mb-1">Clients</h1>
+    <h1 class="font-display text-2xl font-bold mb-1">Customers</h1>
     <p class="text-sm text-mute mb-6 max-w-2xl">
-      Every account is listed here, including self-registered Trade / B2B applicants — they
-      start on the Retail tier until you assign them a negotiated pricing category below.
+      Every account, including self-registered Trade / B2B applicants — they start on the
+      Retail tier until you assign a negotiated category. Discount comes off the price the
+      markup rules resolve; currency is what the account is quoted in.
     </p>
 
     @if (error()) {
@@ -21,10 +22,10 @@ import type { AdminClient, ClientInput, TierRef } from '../core/admin.models';
     @if (loading()) {
       <div class="panel h-40 animate-pulse"></div>
     } @else {
-      <div class="border border-ink-line rounded-plate overflow-x-auto">
-        <table class="w-full text-sm min-w-[760px]">
+      <div class="table-wrap">
+        <table class="w-full text-sm min-w-[1060px]">
           <thead>
-            <tr class="bg-ink-panel text-mute text-xs uppercase tracking-wider text-left">
+            <tr class="table-head">
               <th class="px-4 py-3 font-medium">Name</th>
               <th class="px-4 py-3 font-medium">Email</th>
               <th class="px-4 py-3 font-medium">Login</th>
@@ -37,7 +38,7 @@ import type { AdminClient, ClientInput, TierRef } from '../core/admin.models';
           </thead>
           <tbody>
             @for (c of clients(); track c.id) {
-              <tr class="border-t border-ink-line hover:bg-ink-panel/60">
+              <tr class="table-row">
                 <td class="px-4 py-3 font-medium">{{ c.name }}</td>
                 <td class="px-4 py-3 text-mute font-mono text-xs">{{ c.email }}</td>
                 <td class="px-4 py-3">
