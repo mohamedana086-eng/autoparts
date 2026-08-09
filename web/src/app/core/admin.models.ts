@@ -123,6 +123,8 @@ export interface AdminProduct {
   manufacturerName: string | null;
   vehicleSystemId: string;
   systemName: string | null;
+  supplierId: string | null;
+  supplierName: string | null;
   interchangeCount: number;
 }
 
@@ -132,19 +134,23 @@ export interface ProductInput {
   description: string;
   manufacturerId: string;
   vehicleSystemId: string;
+  supplierId: string | null;
   basePrice: number;
-  stockDays: number;
+  /** Blank on a new part means "use the supplier's default lead time". */
+  stockDays: string;
 }
 
 export interface ProductsResponse {
   products: AdminProduct[];
   manufacturers: TierRef[];
   systems: TierRef[];
+  suppliers: TierRef[];
 }
 
 /** What the trading relationship is. Distinct from `rating`, which is how
  *  well they actually perform. */
-export const RELIABILITIES = ['official', 'reliable', 'standard'] as const;
+/** Mirrors lib/supplier-classification.ts on the API. Strongest first. */
+export const RELIABILITIES = ['official', 'dealer', 'reliable', 'standard'] as const;
 
 export type Reliability = (typeof RELIABILITIES)[number];
 
@@ -162,7 +168,20 @@ export interface AdminSupplier {
   rating: number | null;
   /** Whether they take stock back. Null when the terms are not established. */
   acceptsReturns: boolean | null;
+  country: string | null;
+  /** Warranty in months. Null means none agreed. */
+  guaranteeMonths: number | null;
+  /** Lead time inherited by new parts that leave theirs blank. */
+  defaultStockDays: number | null;
+  /** What they invoice in. Reference only — does not affect pricing. */
+  purchaseCurrencyId: string | null;
+  purchaseCurrencyCode: string | null;
   productCount: number;
+}
+
+export interface SuppliersResponse {
+  suppliers: AdminSupplier[];
+  currencies: TierRef[];
 }
 
 export interface SupplierInput {
@@ -175,4 +194,9 @@ export interface SupplierInput {
   rating: number | null;
   /** Null clears the return terms back to not-established. */
   acceptsReturns: boolean | null;
+  country: string;
+  /** Empty string clears it. */
+  guaranteeMonths: string;
+  defaultStockDays: string;
+  purchaseCurrencyId: string | null;
 }

@@ -21,14 +21,20 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const existing = await prisma.product.findUnique({ where: { id: params.id } });
   if (!existing) return NextResponse.json({ error: 'Product not found.' }, { status: 404 });
 
-  const [manufacturer, system, clash] = await Promise.all([
+  const [manufacturer, system, clash, supplier] = await Promise.all([
     prisma.manufacturer.findUnique({ where: { id: parsed.value.manufacturerId } }),
     prisma.vehicleSystem.findUnique({ where: { id: parsed.value.vehicleSystemId } }),
     prisma.product.findUnique({ where: { partNumber: parsed.value.partNumber } }),
+    parsed.value.supplierId
+      ? prisma.supplier.findUnique({ where: { id: parsed.value.supplierId } })
+      : Promise.resolve(null),
   ]);
 
   if (!manufacturer) return NextResponse.json({ error: 'Unknown manufacturer.' }, { status: 400 });
   if (!system) return NextResponse.json({ error: 'Unknown vehicle system.' }, { status: 400 });
+  if (parsed.value.supplierId && !supplier) {
+    return NextResponse.json({ error: 'Unknown supplier.' }, { status: 400 });
+  }
   if (clash && clash.id !== params.id) {
     return NextResponse.json(
       { error: `Part number ${parsed.value.partNumber} belongs to another product.` },
@@ -36,12 +42,16 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     );
   }
 
+  // On an edit a blank lead time keeps what the part already had, rather than
+  // reaching for the supplier's default: the number on an existing part was
+  // put there deliberately, and clearing a field is not a request to change it.
   const product = await prisma.product.update({
     where: { id: params.id },
-    data: parsed.value,
+    data: { ...parsed.value, stockDays: parsed.value.stockDays ?? existing.stockDays },
     include: {
       manufacturer: true,
       vehicleSystem: true,
+      supplier: true,
       _count: { select: { interchanges: true } },
     },
   });

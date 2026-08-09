@@ -8,12 +8,23 @@ export async function GET() {
   const denied = await requireAdmin();
   if (denied) return denied;
 
-  const suppliers = await prisma.supplier.findMany({
-    include: { _count: { select: { products: true } } },
-    orderBy: { name: 'asc' },
-  });
+  const [suppliers, currencies] = await Promise.all([
+    prisma.supplier.findMany({
+      include: { _count: { select: { products: true } }, purchaseCurrency: true },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.currency.findMany({
+      where: { active: true },
+      orderBy: [{ isBase: 'desc' }, { code: 'asc' }],
+    }),
+  ]);
 
-  return NextResponse.json({ suppliers: suppliers.map(serialiseSupplier) });
+  return NextResponse.json({
+    suppliers: suppliers.map(serialiseSupplier),
+    // For the editor's currency select. Reference only on a supplier, but it
+    // still has to be picked from the currencies that exist.
+    currencies: currencies.map((c) => ({ id: c.id, name: `${c.code} — ${c.name}` })),
+  });
 }
 
 // POST /api/admin/suppliers
@@ -48,7 +59,12 @@ export async function POST(req: Request) {
     );
   }
 
-  const supplier = await prisma.supplier.create({ data: input.value });
+  // The relation has to be loaded, or the response names no currency and the
+  // editor shows the field blank on a supplier that in fact has one.
+  const supplier = await prisma.supplier.create({
+    data: input.value,
+    include: { purchaseCurrency: true },
+  });
 
-  return NextResponse.json({ supplier: serialiseSupplier({ ...supplier }) }, { status: 201 });
+  return NextResponse.json({ supplier: serialiseSupplier(supplier) }, { status: 201 });
 }

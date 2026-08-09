@@ -56,7 +56,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const supplier = await prisma.supplier.update({
       where: { id: params.id },
       data,
-      include: { _count: { select: { products: true } } },
+      include: { _count: { select: { products: true } }, purchaseCurrency: true },
     });
     return NextResponse.json({ supplier: serialiseSupplier(supplier) });
   }
@@ -85,7 +85,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const supplier = await prisma.supplier.update({
     where: { id: params.id },
     data: input.value,
-    include: { _count: { select: { products: true } } },
+    include: { _count: { select: { products: true } }, purchaseCurrency: true },
   });
 
   return NextResponse.json({ supplier: serialiseSupplier(supplier) });

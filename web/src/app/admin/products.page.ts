@@ -8,8 +8,10 @@ const BLANK: ProductInput = {
   description: '',
   manufacturerId: '',
   vehicleSystemId: '',
+  supplierId: null,
   basePrice: 0,
-  stockDays: 1,
+  // Blank so a new part inherits its supplier's lead time by default.
+  stockDays: '',
 };
 
 @Component({
@@ -95,11 +97,26 @@ const BLANK: ProductInput = {
             </label>
             <label class="grid gap-1 text-xs text-mute">
               Delivery (days)
-              <input type="number" min="0" step="1" required [value]="form().stockDays"
-                     (input)="patchNumber('stockDays', $any($event.target).value)"
+              <input type="number" min="0" step="1" placeholder="supplier default"
+                     [value]="form().stockDays"
+                     (input)="patch('stockDays', $any($event.target).value)"
                      class="field font-mono" />
             </label>
           </div>
+
+          <label class="grid gap-1 text-xs text-mute md:col-span-3">
+            Supplier
+            <select [value]="form().supplierId ?? ''"
+                    (change)="patchSupplier($any($event.target).value)" class="field">
+              <option value="">— unsourced —</option>
+              @for (s of suppliers(); track s.id) {
+                <option [value]="s.id" [selected]="form().supplierId === s.id">{{ s.name }}</option>
+              }
+            </select>
+            <span class="text-[11px] text-mute">
+              A new part with the delivery field left blank takes this supplier's default.
+            </span>
+          </label>
 
           <div class="md:col-span-3 flex items-center gap-3 mt-1">
             <button type="submit" [disabled]="saving()"
@@ -168,6 +185,7 @@ export class AdminProductsPage {
   protected readonly products = signal<AdminProduct[]>([]);
   protected readonly manufacturers = signal<TierRef[]>([]);
   protected readonly systems = signal<TierRef[]>([]);
+  protected readonly suppliers = signal<TierRef[]>([]);
   protected readonly loading = signal(true);
   protected readonly saving = signal(false);
   protected readonly error = signal<string | null>(null);
@@ -191,6 +209,7 @@ export class AdminProductsPage {
         this.products.set(res.products);
         this.manufacturers.set(res.manufacturers);
         this.systems.set(res.systems);
+        this.suppliers.set(res.suppliers);
         this.loading.set(false);
       })
       .catch(() => {
@@ -203,7 +222,11 @@ export class AdminProductsPage {
     this.form.update((f) => ({ ...f, [key]: value }));
   }
 
-  protected patchNumber(key: 'basePrice' | 'stockDays', value: string): void {
+  protected patchSupplier(id: string): void {
+    this.form.update((f) => ({ ...f, supplierId: id || null }));
+  }
+
+  protected patchNumber(key: 'basePrice', value: string): void {
     this.form.update((f) => ({ ...f, [key]: Number(value) }));
   }
 
@@ -222,8 +245,9 @@ export class AdminProductsPage {
       description: p.description ?? '',
       manufacturerId: p.manufacturerId,
       vehicleSystemId: p.vehicleSystemId,
+      supplierId: p.supplierId,
       basePrice: p.basePrice,
-      stockDays: p.stockDays,
+      stockDays: String(p.stockDays),
     });
     this.editingId.set(p.id);
     this.editing.set(true);

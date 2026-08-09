@@ -3,13 +3,11 @@ import { prisma } from '@/lib/db';
 import {
   idsByFuzzyMatch, idsMatchingNormalisedPartNumber, loadPricingContext, normalisePartNumber, priceFor,
 } from '@/lib/catalog';
+import { RELIABILITIES, isReliability } from '@/lib/supplier-classification';
 
 type Sort = 'relevance' | 'price-asc' | 'price-desc' | 'delivery';
 const SORTS: Sort[] = ['relevance', 'price-asc', 'price-desc', 'delivery'];
 
-/** Mirrors Supplier.reliability. Kept here rather than imported from
- *  lib/admin-suppliers, which is server-only for the admin routes. */
-const RELIABILITIES = ['official', 'reliable', 'standard'];
 
 /** Why a row came back, so the UI can explain non-obvious hits. */
 type MatchedOn =
@@ -54,9 +52,7 @@ export async function GET(req: NextRequest) {
   // and of the rating, so all three compose.
   const requestedReliability = searchParams.get('reliability')?.trim() || undefined;
   const reliability =
-    requestedReliability && RELIABILITIES.includes(requestedReliability)
-      ? requestedReliability
-      : undefined;
+    requestedReliability && isReliability(requestedReliability) ? requestedReliability : undefined;
 
   // Only an explicit yes matches. A supplier whose return terms have not been
   // recorded is not evidence that they accept them.

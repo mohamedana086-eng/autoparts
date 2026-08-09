@@ -9,8 +9,10 @@ import 'server-only';
  * generated route types.
  */
 
-/** What `Supplier.reliability` is allowed to be — the trading relationship. */
-export const RELIABILITIES = ['official', 'reliable', 'standard'] as const;
+// The vocabulary lives in lib/supplier-classification.ts so the catalogue
+// search shares it rather than keeping a second copy.
+export { RELIABILITIES } from '@/lib/supplier-classification';
+import { isReliability, RELIABILITIES } from '@/lib/supplier-classification';
 
 export const MIN_RATING = 1;
 export const MAX_RATING = 5;
@@ -26,6 +28,27 @@ export interface SupplierInput {
   /** Null means the return terms are not established, which is deliberately
    *  different from knowing they refuse. */
   acceptsReturns: boolean | null;
+  country: string | null;
+  /** Warranty in months. Null means none agreed. */
+  guaranteeMonths: number | null;
+  /** Lead time for parts that have none of their own. */
+  defaultStockDays: number | null;
+  /** What they invoice in. Reference only — does not affect pricing. */
+  purchaseCurrencyId: string | null;
+}
+
+/** A whole number of `unit`, or null. Rejects negatives and fractions. */
+function readOptionalCount(
+  raw: unknown,
+  label: string
+): { ok: true; value: number | null } | { ok: false; error: string } {
+  if (raw === undefined || raw === null || raw === '') return { ok: true, value: null };
+
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 0) {
+    return { ok: false, error: `${label} must be a whole number of zero or more, or left blank.` };
+  }
+  return { ok: true, value };
 }
 
 /**
@@ -99,7 +122,7 @@ export function readSupplierInput(
   }
 
   const reliability = String(body.reliability ?? 'standard').trim();
-  if (!RELIABILITIES.includes(reliability as (typeof RELIABILITIES)[number])) {
+  if (!isReliability(reliability)) {
     return { ok: false, error: `Reliability must be one of ${RELIABILITIES.join(', ')}.` };
   }
 
@@ -109,7 +132,15 @@ export function readSupplierInput(
   const acceptsReturns = readTriStateFlag(body.acceptsReturns, 'Returns');
   if (!acceptsReturns.ok) return acceptsReturns;
 
+  const guaranteeMonths = readOptionalCount(body.guaranteeMonths, 'Guarantee');
+  if (!guaranteeMonths.ok) return guaranteeMonths;
+
+  const defaultStockDays = readOptionalCount(body.defaultStockDays, 'Delivery time');
+  if (!defaultStockDays.ok) return defaultStockDays;
+
   const description = String(body.description ?? '').trim();
+  const country = String(body.country ?? '').trim();
+  const purchaseCurrencyId = String(body.purchaseCurrencyId ?? '').trim();
 
   return {
     ok: true,
@@ -121,6 +152,10 @@ export function readSupplierInput(
       reliability,
       rating: rating.value,
       acceptsReturns: acceptsReturns.value,
+      country: country || null,
+      guaranteeMonths: guaranteeMonths.value,
+      defaultStockDays: defaultStockDays.value,
+      purchaseCurrencyId: purchaseCurrencyId || null,
     },
   };
 }
@@ -128,6 +163,8 @@ export function readSupplierInput(
 export function serialiseSupplier(s: {
   id: string; code: string; slug: string; name: string; description: string | null;
   reliability: string; rating: number | null; acceptsReturns: boolean | null;
+  country?: string | null; guaranteeMonths?: number | null; defaultStockDays?: number | null;
+  purchaseCurrencyId?: string | null; purchaseCurrency?: { code: string } | null;
   _count?: { products: number };
 }) {
   return {
@@ -139,6 +176,11 @@ export function serialiseSupplier(s: {
     reliability: s.reliability,
     rating: s.rating,
     acceptsReturns: s.acceptsReturns,
+    country: s.country ?? null,
+    guaranteeMonths: s.guaranteeMonths ?? null,
+    defaultStockDays: s.defaultStockDays ?? null,
+    purchaseCurrencyId: s.purchaseCurrencyId ?? null,
+    purchaseCurrencyCode: s.purchaseCurrency?.code ?? null,
     productCount: s._count?.products ?? 0,
   };
 }

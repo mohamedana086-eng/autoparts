@@ -14,8 +14,14 @@ export interface ProductInput {
   description: string | null;
   manufacturerId: string;
   vehicleSystemId: string;
+  supplierId: string | null;
   basePrice: number;
-  stockDays: number;
+  /**
+   * Null when the form left it blank, which is how a new part asks to inherit
+   * its supplier's default lead time. The column itself is never null — the
+   * caller resolves this before writing.
+   */
+  stockDays: number | null;
 }
 
 /** Validates a create/update body, returning either the values or a message. */
@@ -37,12 +43,16 @@ export function readProductInput(body: Record<string, unknown>):
     return { ok: false, error: 'Purchase price must be a number of zero or more.' };
   }
 
-  const stockDays = Number(body.stockDays);
-  if (!Number.isInteger(stockDays) || stockDays < 0) {
+  // Blank means "use the supplier's default", which the route resolves.
+  const blankStockDays =
+    body.stockDays === undefined || body.stockDays === null || body.stockDays === '';
+  const stockDays = blankStockDays ? null : Number(body.stockDays);
+  if (stockDays !== null && (!Number.isInteger(stockDays) || stockDays < 0)) {
     return { ok: false, error: 'Delivery days must be a whole number of zero or more.' };
   }
 
   const description = String(body.description ?? '').trim();
+  const supplierId = String(body.supplierId ?? '').trim();
 
   return {
     ok: true,
@@ -52,6 +62,7 @@ export function readProductInput(body: Record<string, unknown>):
       description: description || null,
       manufacturerId,
       vehicleSystemId,
+      supplierId: supplierId || null,
       basePrice,
       stockDays,
     },
@@ -61,7 +72,9 @@ export function readProductInput(body: Record<string, unknown>):
 export function serialiseProduct(p: {
   id: string; partNumber: string; name: string; description: string | null;
   basePrice: number; stockDays: number; manufacturerId: string; vehicleSystemId: string;
+  supplierId?: string | null;
   manufacturer?: { name: string }; vehicleSystem?: { name: string };
+  supplier?: { name: string } | null;
   _count?: { interchanges: number };
 }) {
   return {
@@ -75,6 +88,8 @@ export function serialiseProduct(p: {
     manufacturerName: p.manufacturer?.name ?? null,
     vehicleSystemId: p.vehicleSystemId,
     systemName: p.vehicleSystem?.name ?? null,
+    supplierId: p.supplierId ?? null,
+    supplierName: p.supplier?.name ?? null,
     interchangeCount: p._count?.interchanges ?? 0,
   };
 }

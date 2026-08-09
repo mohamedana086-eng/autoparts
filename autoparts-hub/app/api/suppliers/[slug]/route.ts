@@ -48,6 +48,8 @@ export async function GET(_req: Request, { params }: { params: { slug: string } 
       reliability: supplier.reliability,
       rating: supplier.rating,
       acceptsReturns: supplier.acceptsReturns,
+      country: supplier.country,
+      guaranteeMonths: supplier.guaranteeMonths,
       productCount: supplier.products.length,
       fastestDelivery: fastest,
       systems: [...systems.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),

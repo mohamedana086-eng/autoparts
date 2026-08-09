@@ -18,6 +18,8 @@ export async function GET() {
       reliability: s.reliability,
       rating: s.rating,
       acceptsReturns: s.acceptsReturns,
+      country: s.country,
+      guaranteeMonths: s.guaranteeMonths,
       productCount: s._count.products,
     })),
   });

@@ -24,12 +24,13 @@ export async function GET(req: NextRequest) {
       }
     : {};
 
-  const [products, manufacturers, systems] = await Promise.all([
+  const [products, manufacturers, systems, suppliers] = await Promise.all([
     prisma.product.findMany({
       where,
       include: {
         manufacturer: true,
         vehicleSystem: true,
+        supplier: true,
         _count: { select: { interchanges: true } },
       },
       orderBy: [{ vehicleSystem: { order: 'asc' } }, { partNumber: 'asc' }],
@@ -37,12 +38,14 @@ export async function GET(req: NextRequest) {
     }),
     prisma.manufacturer.findMany({ orderBy: { name: 'asc' } }),
     prisma.vehicleSystem.findMany({ orderBy: { order: 'asc' } }),
+    prisma.supplier.findMany({ orderBy: { name: 'asc' } }),
   ]);
 
   return NextResponse.json({
     products: products.map(serialiseProduct),
     manufacturers: manufacturers.map((m) => ({ id: m.id, name: m.name })),
     systems: systems.map((s) => ({ id: s.id, name: s.name })),
+    suppliers: suppliers.map((s) => ({ id: s.id, name: s.name })),
   });
 }
 
@@ -61,14 +64,20 @@ export async function POST(req: NextRequest) {
   const parsed = readProductInput(body);
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
 
-  const [manufacturer, system, clash] = await Promise.all([
+  const [manufacturer, system, clash, supplier] = await Promise.all([
     prisma.manufacturer.findUnique({ where: { id: parsed.value.manufacturerId } }),
     prisma.vehicleSystem.findUnique({ where: { id: parsed.value.vehicleSystemId } }),
     prisma.product.findUnique({ where: { partNumber: parsed.value.partNumber } }),
+    parsed.value.supplierId
+      ? prisma.supplier.findUnique({ where: { id: parsed.value.supplierId } })
+      : Promise.resolve(null),
   ]);
 
   if (!manufacturer) return NextResponse.json({ error: 'Unknown manufacturer.' }, { status: 400 });
   if (!system) return NextResponse.json({ error: 'Unknown vehicle system.' }, { status: 400 });
+  if (parsed.value.supplierId && !supplier) {
+    return NextResponse.json({ error: 'Unknown supplier.' }, { status: 400 });
+  }
   if (clash) {
     return NextResponse.json(
       { error: `Part number ${parsed.value.partNumber} is already in the catalogue.` },
@@ -76,11 +85,18 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // A blank lead time inherits the supplier's default, then the schema's.
+  // This is the only place the supplier default is consulted: once a part
+  // carries a number it is the part's own, and a later change to the
+  // supplier's default must not silently rewrite it.
+  const stockDays = parsed.value.stockDays ?? supplier?.defaultStockDays ?? 1;
+
   const product = await prisma.product.create({
-    data: parsed.value,
+    data: { ...parsed.value, stockDays },
     include: {
       manufacturer: true,
       vehicleSystem: true,
+      supplier: true,
       _count: { select: { interchanges: true } },
     },
   });

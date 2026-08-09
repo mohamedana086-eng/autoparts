@@ -2,6 +2,7 @@ import { Component, input } from '@angular/core';
 
 const RELIABILITY_STYLE: Record<string, string> = {
   official: 'border-stock text-stock',
+  dealer: 'border-stock/60 text-stock',
   reliable: 'border-signal text-signal',
   standard: 'border-ink-line text-mute',
 };

@@ -34,7 +34,21 @@ model Supplier {
   code         String        @unique // e.g. IB16, NP20
   slug         String        @unique // url for the supplier's own page
   description  String?       // shown on that page
-  reliability  String        @default("standard") // official | reliable | standard
+  reliability  String        @default("standard") // official | dealer | reliable | standard
+  /// Where they ship from. Free text: a supplier list is not worth an ISO
+  /// country table until something actually filters or groups by it.
+  country      String?
+  /// Warranty they stand behind, in months. Null means not agreed.
+  guaranteeMonths Int?
+  /// Lead time to fall back on for a part that has none of its own. The
+  /// part's own `stockDays` always wins where it is set — this fills the gap
+  /// for newly added parts rather than overriding what is already there.
+  defaultStockDays Int?
+  /// What they invoice in. Recorded for reference only: `Product.basePrice`
+  /// stays denominated in the base currency, so the pricing engine is
+  /// untouched by this.
+  purchaseCurrencyId String?
+  purchaseCurrency   Currency? @relation(fields: [purchaseCurrencyId], references: [id])
   /// How well they actually perform, 1–5, set by an admin. Distinct from
   /// `reliability`, which describes the trading relationship: an official
   /// distributor can still be slow. Null means nobody has rated them yet,
@@ -185,6 +199,8 @@ model Currency {
   isBase   Boolean  @default(false)
   active   Boolean  @default(true)
   clients  Client[]
+  /// Suppliers who invoice in it. Reference only — see Supplier.purchaseCurrencyId.
+  suppliers Supplier[]
 }
 
 // ---------- Auth ----------

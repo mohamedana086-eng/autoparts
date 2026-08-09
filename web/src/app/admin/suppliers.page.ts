@@ -1,10 +1,12 @@
 import { Component, inject, signal } from '@angular/core';
 import { AdminService } from '../core/admin.service';
+import { SupplierBadges } from '../core/supplier-badges';
 import {
   MAX_RATING,
   RELIABILITIES,
   type AdminSupplier,
   type SupplierInput,
+  type TierRef,
 } from '../core/admin.models';
 
 const BLANK: SupplierInput = {
@@ -15,16 +17,15 @@ const BLANK: SupplierInput = {
   reliability: 'standard',
   rating: null,
   acceptsReturns: null,
-};
-
-const RELIABILITY_STYLE: Record<string, string> = {
-  official: 'border-stock text-stock',
-  reliable: 'border-signal text-signal',
-  standard: 'border-ink-line text-mute',
+  country: '',
+  guaranteeMonths: '',
+  defaultStockDays: '',
+  purchaseCurrencyId: null,
 };
 
 @Component({
   selector: 'app-admin-suppliers',
+  imports: [SupplierBadges],
   template: `
     <h1 class="font-display text-2xl font-bold mb-1">Suppliers</h1>
     <p class="text-sm text-mute mb-6 max-w-2xl">
@@ -89,6 +90,46 @@ const RELIABILITY_STYLE: Record<string, string> = {
           </label>
 
           <label class="grid gap-1 text-xs text-mute">
+            Country
+            <input placeholder="e.g. Germany" [value]="form().country"
+                   (input)="patch('country', $any($event.target).value)" class="field" />
+          </label>
+
+          <label class="grid gap-1 text-xs text-mute">
+            Guarantee (months)
+            <input type="number" min="0" step="1" placeholder="none agreed"
+                   [value]="form().guaranteeMonths"
+                   (input)="patch('guaranteeMonths', $any($event.target).value)"
+                   class="field font-mono" />
+          </label>
+
+          <label class="grid gap-1 text-xs text-mute">
+            Delivery time (days)
+            <input type="number" min="0" step="1" placeholder="none"
+                   [value]="form().defaultStockDays"
+                   (input)="patch('defaultStockDays', $any($event.target).value)"
+                   class="field font-mono" />
+            <span class="text-[11px] text-mute">
+              Used for new parts that leave their own delivery time blank. Never changes a
+              part that already has one.
+            </span>
+          </label>
+
+          <label class="grid gap-1 text-xs text-mute">
+            Invoices in
+            <select [value]="form().purchaseCurrencyId ?? ''"
+                    (change)="patchCurrency($any($event.target).value)" class="field">
+              <option value="">— not recorded —</option>
+              @for (c of currencies(); track c.id) {
+                <option [value]="c.id" [selected]="form().purchaseCurrencyId === c.id">{{ c.name }}</option>
+              }
+            </select>
+            <span class="text-[11px] text-mute">
+              Reference only — purchase prices stay in the base currency.
+            </span>
+          </label>
+
+          <label class="grid gap-1 text-xs text-mute">
             Returns accepted
             <select [value]="returnsValue(form().acceptsReturns)"
                     (change)="patchReturns($any($event.target).value)"
@@ -141,7 +182,10 @@ const RELIABILITY_STYLE: Record<string, string> = {
             <tr class="bg-ink-panel text-mute text-xs uppercase tracking-wider text-left">
               <th class="px-4 py-3 font-medium">Supplier</th>
               <th class="px-4 py-3 font-medium">Code</th>
-              <th class="px-4 py-3 font-medium">Reliability</th>
+              <th class="px-4 py-3 font-medium">Type</th>
+              <th class="px-4 py-3 font-medium">Country</th>
+              <th class="px-4 py-3 font-medium text-right">Guar.</th>
+              <th class="px-4 py-3 font-medium text-right">Lead</th>
               <th class="px-4 py-3 font-medium">Returns</th>
               <th class="px-4 py-3 font-medium">Rating</th>
               <th class="px-4 py-3 font-medium">Parts</th>
@@ -157,8 +201,19 @@ const RELIABILITY_STYLE: Record<string, string> = {
                 </td>
                 <td class="px-4 py-3 font-mono text-xs">{{ s.code }}</td>
                 <td class="px-4 py-3">
-                  <span class="font-mono text-[10px] uppercase px-2 py-0.5 rounded-plate border"
-                        [class]="badge(s.reliability)">{{ s.reliability }}</span>
+                  <app-supplier-badges [reliability]="s.reliability" [acceptsReturns]="null" />
+                </td>
+                <td class="px-4 py-3 text-xs">
+                  {{ s.country ?? '—' }}
+                  @if (s.purchaseCurrencyCode) {
+                    <span class="block text-mute font-mono">{{ s.purchaseCurrencyCode }}</span>
+                  }
+                </td>
+                <td class="px-4 py-3 font-mono text-xs text-right">
+                  {{ s.guaranteeMonths === null ? '—' : s.guaranteeMonths + 'm' }}
+                </td>
+                <td class="px-4 py-3 font-mono text-xs text-right">
+                  {{ s.defaultStockDays === null ? '—' : s.defaultStockDays + 'd' }}
                 </td>
                 <td class="px-4 py-3">
                   <select [value]="returnsValue(s.acceptsReturns)"
@@ -207,7 +262,7 @@ const RELIABILITY_STYLE: Record<string, string> = {
               </tr>
             }
             @if (suppliers().length === 0) {
-              <tr><td colspan="7" class="px-4 py-8 text-center text-mute text-sm">No suppliers yet.</td></tr>
+              <tr><td colspan="10" class="px-4 py-8 text-center text-mute text-sm">No suppliers yet.</td></tr>
             }
           </tbody>
         </table>
@@ -219,6 +274,7 @@ export class AdminSuppliersPage {
   private readonly admin = inject(AdminService);
 
   protected readonly suppliers = signal<AdminSupplier[]>([]);
+  protected readonly currencies = signal<TierRef[]>([]);
   protected readonly loading = signal(true);
   protected readonly saving = signal(false);
   protected readonly error = signal<string | null>(null);
@@ -245,6 +301,7 @@ export class AdminSuppliersPage {
       .suppliers()
       .then((res) => {
         this.suppliers.set(res.suppliers);
+        this.currencies.set(res.currencies);
         this.loading.set(false);
       })
       .catch(() => {
@@ -294,6 +351,10 @@ export class AdminSuppliersPage {
       reliability: s.reliability,
       rating: s.rating,
       acceptsReturns: s.acceptsReturns,
+      country: s.country ?? '',
+      guaranteeMonths: s.guaranteeMonths === null ? '' : String(s.guaranteeMonths),
+      defaultStockDays: s.defaultStockDays === null ? '' : String(s.defaultStockDays),
+      purchaseCurrencyId: s.purchaseCurrencyId,
     });
     this.editingId.set(s.id);
     this.editing.set(true);
@@ -380,7 +441,7 @@ export class AdminSuppliersPage {
     }
   }
 
-  protected badge(reliability: string): string {
-    return RELIABILITY_STYLE[reliability] ?? RELIABILITY_STYLE['standard'];
+  protected patchCurrency(id: string): void {
+    this.form.update((f) => ({ ...f, purchaseCurrencyId: id || null }));
   }
 }

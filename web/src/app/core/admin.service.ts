@@ -4,7 +4,7 @@ import { firstValueFrom } from 'rxjs';
 import type {
   AdminClient, AdminCurrency, AdminOrder, AdminProduct, AdminStats, AdminSupplier, ClientCategory,
   ClientInput, ClientsResponse, CurrencyInput, MarkupRule, MarkupRulesResponse, ProductInput,
-  ProductsResponse, SupplierInput, TierRef,
+  ProductsResponse, SupplierInput, SuppliersResponse, TierRef,
 } from './admin.models';
 
 /**
@@ -108,8 +108,8 @@ export class AdminService {
     return firstValueFrom(this.http.delete<{ ok: boolean }>(`/api/admin/products/${id}`));
   }
 
-  suppliers(): Promise<{ suppliers: AdminSupplier[] }> {
-    return firstValueFrom(this.http.get<{ suppliers: AdminSupplier[] }>('/api/admin/suppliers'));
+  suppliers(): Promise<SuppliersResponse> {
+    return firstValueFrom(this.http.get<SuppliersResponse>('/api/admin/suppliers'));
   }
 
   createSupplier(input: SupplierInput): Promise<{ supplier: AdminSupplier }> {
