@@ -4,6 +4,11 @@
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  // Migrations go straight to the database rather than through the pooler.
+  // A migration takes a session-level advisory lock, and pgbouncer hands the
+  // server connection holding it to the next client, so the lock outlives the
+  // command and the following migration waits on it until the pool recycles.
+  directUrl = env("DIRECT_URL")
 }
 
 generator client {
