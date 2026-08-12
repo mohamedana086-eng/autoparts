@@ -32,6 +32,21 @@ Actions were relying on a layout redirect that does not gate them.
   notifications, dashboard stats. Every one of them is gated by
   `requireAdmin()` or `requireStaff()` in `lib/admin-guard.ts` — the gate
   lives in the handler, never in a layout or a hidden link.
+- **Stock** — `lib/inventory.ts`. Placing an order holds the units behind it:
+  `StockLevel.reserved` goes up, `quantity` stays put until the goods actually
+  leave, and marking the order shipped or paid brings both down. Warehouses
+  are drawn highest-`priority` first and a line too big for one site is split
+  across the next, recorded per warehouse in `OrderItemAllocation` so shipping
+  knows which shelf to draw down. Reservation runs inside the order's own
+  transaction under row locks, so two customers cannot be sold the same last
+  unit.
+
+  **A part with no stock row is untracked, not out of stock.** Nobody has
+  counted it into a warehouse, so there is no number to hold it to and it
+  sells on `Product.stockDays` the way the whole catalogue did before
+  warehouses existed. Only a counted part is held to a figure. Reading an
+  absent row as zero would take every uncounted part off sale.
+
 - **Pricing engine** — `lib/pricing.ts`. Given a product + client, it
   finds the most specific active markup rule that matches and applies it
   (percent / flat amount / fixed price), falling back to the client's

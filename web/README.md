@@ -79,6 +79,11 @@ caller's tier, so a tampered cart cannot decide what it pays, and it enforces
 the tier's minimum order amount. The cart is cleared only once the order is
 recorded.
 
+Placing an order also holds the stock behind it, so a part someone has counted
+into a warehouse can be refused with a 409 naming what is left. A part nobody
+has counted is untracked, not out of stock, and still sells on its lead time —
+see the API's README. Either way the cart survives a refusal intact.
+
 ## The basket, and the copy on the server
 
 `localStorage` is still what renders: instant, works signed out, and it holds

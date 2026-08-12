@@ -2,9 +2,23 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { loadPricingContext, priceFor, roundMoney } from '@/lib/catalog';
+import { reserveStock, type Shortfall } from '@/lib/inventory';
 
 const MAX_LINES = 200;
 const MAX_QTY = 999;
+
+/**
+ * Thrown to abandon the order transaction when a part cannot be held.
+ *
+ * An exception rather than a returned value because the reservation happens
+ * inside `$transaction`, and rolling the order back is exactly what throwing
+ * does. Caught immediately below and turned into a 409.
+ */
+class OutOfStock extends Error {
+  constructor(readonly shortfall: Shortfall) {
+    super('Not enough stock.');
+  }
+}
 
 /** APH-260729-K3F9 — short enough to read out over the phone. */
 function makeReference(): string {
@@ -147,21 +161,47 @@ export async function POST(req: NextRequest) {
   // reference is unique; a collision is unlikely but cheap to retry.
   for (let attempt = 0; attempt < 5; attempt++) {
     try {
-      const order = await prisma.order.create({
-        data: {
-          reference: makeReference(),
-          clientId: session.userId,
-          currencyCode,
-          currencyRate: rate,
-          items: {
-            create: lines.map((l) => ({
-              productId: l.productId,
-              quantity: l.quantity,
-              unitPrice: l.unitPrice,
-            })),
+      // The order and the stock it draws on are written together. Recording an
+      // order that failed to hold its stock would promise goods twice; holding
+      // stock for an order that failed to save would strand it.
+      const order = await prisma.$transaction(async (tx) => {
+        const created = await tx.order.create({
+          data: {
+            reference: makeReference(),
+            clientId: session.userId,
+            currencyCode,
+            currencyRate: rate,
+            items: {
+              create: lines.map((l) => ({
+                productId: l.productId,
+                quantity: l.quantity,
+                unitPrice: l.unitPrice,
+              })),
+            },
           },
-        },
-        include: { items: true },
+          include: { items: true },
+        });
+
+        const held = await reserveStock(
+          tx,
+          lines.map((l) => ({ productId: l.productId, quantity: l.quantity }))
+        );
+        if (!held.ok) throw new OutOfStock(held.shortfall);
+
+        // One line per part — `wanted` deduplicated them — so this is 1:1.
+        const lineIdByProduct = new Map(created.items.map((i) => [i.productId, i.id]));
+
+        if (held.allocations.length > 0) {
+          await tx.orderItemAllocation.createMany({
+            data: held.allocations.map((a) => ({
+              orderItemId: lineIdByProduct.get(a.productId)!,
+              warehouseId: a.warehouseId,
+              quantity: a.quantity,
+            })),
+          });
+        }
+
+        return created;
       });
 
       return NextResponse.json(
@@ -178,6 +218,24 @@ export async function POST(req: NextRequest) {
         { status: 201 }
       );
     } catch (e) {
+      if (e instanceof OutOfStock) {
+        const { productId, wanted, available } = e.shortfall;
+        const part = products.find((p) => p.id === productId);
+        const label = part ? `${part.partNumber} (${part.name})` : 'A part in your cart';
+
+        return NextResponse.json(
+          {
+            error:
+              available === 0
+                ? `${label} has just gone out of stock. Remove it and try again.`
+                : `Only ${available} of ${label} ${available === 1 ? 'is' : 'are'} left, and you asked for ${wanted}.`,
+            productId,
+            available,
+          },
+          { status: 409 }
+        );
+      }
+
       const clash =
         typeof e === 'object' && e !== null && (e as { code?: string }).code === 'P2002';
       if (!clash || attempt === 4) throw e;

@@ -291,6 +291,9 @@ model Warehouse {
   priority  Int            @default(0)
   stock     StockLevel[]
   outlets   RetailOutlet[]
+  /// Order lines currently held here. Kept as a relation so a warehouse
+  /// cannot be deleted while orders still point at it.
+  allocations OrderItemAllocation[]
   createdAt DateTime       @default(now())
 }
 
@@ -455,4 +458,32 @@ model OrderItem {
   product      Product  @relation(fields: [productId], references: [id])
   quantity     Int      @default(1)
   unitPrice    Float    // resolved price at time of order (after markup)
+  allocations  OrderItemAllocation[]
+}
+
+/// Which warehouse an order line's stock was held at.
+///
+/// One row per (line, warehouse), because a line can be filled from more than
+/// one: an order for six of a part held three-and-three across two sites is
+/// two allocations, not a choice between them.
+///
+/// It exists so that shipping knows which shelf to draw down. Without it the
+/// only way to release a reservation would be to pick warehouses again by the
+/// same rule and hope nothing had moved in between — and per-warehouse counts,
+/// the whole reason stock is not one number on the part, would stop adding up
+/// after the first split delivery.
+///
+/// A line with no allocations is a part nobody has counted into a warehouse.
+/// That is not the same as one that ran out: untracked parts are sold on their
+/// lead time, exactly as they were before there was any stock at all.
+model OrderItemAllocation {
+  id          String    @id @default(cuid())
+  orderItemId String
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  warehouseId String
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+  quantity    Int
+
+  @@unique([orderItemId, warehouseId])
+  @@index([warehouseId])
 }
