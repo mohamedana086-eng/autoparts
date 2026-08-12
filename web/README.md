@@ -82,5 +82,10 @@ recorded.
 ## Not built yet
 
 No payment step — an order is recorded as `order_is_sent` for the team to
-follow up. The Next app still serves its own copy of the UI at `/` and
-`/admin`; nothing routes to it now that Angular covers both.
+follow up.
+
+The API's saved-basket and notification endpoints (`/api/cart`,
+`/api/notifications`) have no caller here yet: the cart is still
+`localStorage` only, so the admin's open-baskets list stays empty, and a
+notification an admin sends has nowhere to be read. Both need wiring on
+this side.

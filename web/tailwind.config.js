@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
-// Mirrors the Next app's theme so both frontends render the same design.
+// The design theme. This is the only copy — the Next app carried a matching
+// one until its UI was deleted, and the API it is now has no stylesheet.
 module.exports = {
   content: ['./src/**/*.{html,ts}'],
   theme: {

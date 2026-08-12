@@ -1,35 +1,46 @@
-# AutoParts Hub
+# AutoParts Hub — API
 
-A B2B/B2C auto-parts catalog: storefront + admin panel + a rule-based
-markup/pricing engine, built with Next.js 14 (App Router), Prisma, and
-SQLite.
+The backend for a B2B/B2C auto-parts catalogue: a JSON API over Postgres
+plus a rule-based markup/pricing engine, built with Next.js 14 (App
+Router) and Prisma.
+
+**This project serves no pages.** `app/` holds route handlers and nothing
+else — the whole UI, storefront and admin alike, is the Angular app in
+[`../web`](../web), which reaches this through `/api`. It used to carry a
+second copy of that UI; it was deleted once Angular covered both, because
+a page nobody routes to is a page nobody notices going wrong. Its Server
+Actions were relying on a layout redirect that does not gate them.
 
 ## What's here
 
-- **Storefront** — `/` hero + browse-by-system, `/search` results with
-  live resolved pricing, `/product/[id]` detail page with interchanges.
-- **Auth** — `/login`, `/register`. Email + password, sessions via a
-  signed httpOnly cookie (no external auth library). Three account
-  types:
-  - **Admin** — full access to `/admin`.
-  - **B2B** (trade) — self-registers, starts on the Retail tier, then
-    an admin assigns a negotiated pricing category from `/admin/clients`.
-  - **Retail** — self-registers, instant access at the Retail tier.
-  Seeded logins (see below) let you try all three immediately.
-- **Admin panel** — `/admin` dashboard (protected — redirects to
-  `/login` if you're not an Admin), `/admin/clients` (assign role +
-  pricing tier per account), `/admin/client-categories` (pricing
-  tiers), `/admin/markup-rules` (the complex markup rule builder —
-  filter by client category, supplier, manufacturer, vehicle system,
-  part-number prefix, and purchase-price band).
+- **Auth** — `/api/auth/{login,register,logout,session}`. Email +
+  password, sessions via a signed httpOnly cookie (no external auth
+  library). Four account types:
+  - **ADMIN** — every `/api/admin` endpoint.
+  - **SALES** — staff; reaches only its own customers and their orders.
+  - **B2B** (trade) — self-registers on the Retail tier until an admin
+    assigns a negotiated pricing category.
+  - **RETAIL** — self-registers, instant access at the Retail tier.
+  Seeded logins (see below) let you try them immediately.
+- **Catalogue** — `/api/catalog/search`, `/api/catalog/products/[id]`,
+  `/api/catalog/bulk`, `/api/products`, `/api/systems`, `/api/suppliers`,
+  `/api/vehicles` and VIN lookup. Prices come back resolved for whoever
+  is signed in.
+- **Admin** — `/api/admin/**`: products (with images and per-warehouse
+  stock), suppliers, warehouses, retail outlets, customers, client
+  categories, currencies, markup rules, orders, open baskets,
+  notifications, dashboard stats. Every one of them is gated by
+  `requireAdmin()` or `requireStaff()` in `lib/admin-guard.ts` — the gate
+  lives in the handler, never in a layout or a hidden link.
 - **Pricing engine** — `lib/pricing.ts`. Given a product + client, it
-  finds the most specific active markup rule that matches and applies
-  it (percent / flat amount / fixed price). Falls back to the client's
-  category default markup if no rule matches. Storefront pages
-  automatically price using the signed-in user's own tier.
+  finds the most specific active markup rule that matches and applies it
+  (percent / flat amount / fixed price), falling back to the client's
+  category default markup. Then the account's negotiated discount, then
+  the currency conversion — each exactly once, in that order.
 - **Data model** — `prisma/schema.prisma`: vehicle systems, manufacturers,
   suppliers, products, interchanges, client categories, clients (with
-  auth fields + role), markup rules, orders.
+  auth fields + role), markup rules, orders, warehouses, stock levels,
+  retail outlets, saved baskets, notifications.
 
 ## Getting started
 
@@ -45,8 +56,13 @@ npm run db:seed        # sample catalog, client categories, rules, accounts
 npm run dev
 ```
 
-Open http://localhost:3000 for the storefront and
-http://localhost:3000/admin for the admin panel.
+That serves the API on http://localhost:3000. There is nothing to look at
+there — `/` is a 404 by design. Start the Angular app as well and use it
+on :4200, which proxies `/api` back here:
+
+```bash
+npm start --prefix ../web
+```
 
 ## Deploying to Vercel
 
