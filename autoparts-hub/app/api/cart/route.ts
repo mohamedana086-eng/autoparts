@@ -1,41 +1,79 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { loadPricingContext, priceFor, type PricingContext } from '@/lib/catalog';
+
+/** Every basket line the API returns, from either verb. Not exported: a route
+ *  module may only export its handlers, so this stays local — the same
+ *  constraint that put the admin helpers in lib/. */
+type BasketLine = {
+  productId: string;
+  quantity: number;
+  product: {
+    partNumber: string;
+    name: string;
+    basePrice: number;
+    stockDays: number;
+    manufacturer: { name: string };
+    vehicleSystem: { slug: string };
+  };
+};
+
+/** What the product rows a basket line needs look like, for both queries. */
+const WITH_PRICING = {
+  items: {
+    include: { product: { include: { manufacturer: true, vehicleSystem: true } } },
+    orderBy: { addedAt: 'asc' as const },
+  },
+} as const;
+
+function serialiseBasket(
+  items: BasketLine[],
+  ctx: PricingContext,
+  updatedAt: Date | null
+) {
+  return {
+    updatedAt: updatedAt?.toISOString() ?? null,
+    items: items.map((i) => ({
+      productId: i.productId,
+      partNumber: i.product.partNumber,
+      name: i.product.name,
+      manufacturer: i.product.manufacturer.name,
+      stockDays: i.product.stockDays,
+      // Falls back to the purchase price only when no tier resolves at all,
+      // which is the same fallback the order endpoint uses.
+      unitPrice: priceFor(i.product, ctx)?.finalPrice ?? i.product.basePrice,
+      quantity: i.quantity,
+    })),
+  };
+}
 
 /**
  * The signed-in account's saved basket.
  *
- * No prices, in or out. What a line costs is resolved at checkout from the
- * catalogue and the caller's tier — see the order endpoint — and storing a
- * price here would be a second answer that goes stale and could be submitted
- * in place of the real one.
+ * No price is ever *stored* here — the table holds ids and quantities and
+ * nothing else, so there is no second answer to go stale and none to submit in
+ * place of the real one. What a line costs is still resolved at checkout by
+ * the order endpoint, from the catalogue and the caller's tier.
  *
- * The Angular cart still lives in localStorage. This is the copy that survives
- * a new device, and the one the admin's open-baskets list reads.
+ * The read below does resolve a price, the same way search does: freshly, from
+ * the caller's own tier, on every request. That is what lets a basket restored
+ * on a new device render as a basket rather than a list of part numbers, and
+ * it cannot drift, because nothing keeps it.
+ *
+ * The Angular cart still lives in localStorage too. This is the copy that
+ * survives a new device, and the one the admin's open-baskets list reads.
  */
 export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
 
-  const cart = await prisma.cart.findUnique({
-    where: { clientId: session.userId },
-    include: {
-      items: {
-        include: { product: { select: { partNumber: true, name: true } } },
-        orderBy: { addedAt: 'asc' },
-      },
-    },
-  });
+  const [cart, ctx] = await Promise.all([
+    prisma.cart.findUnique({ where: { clientId: session.userId }, include: WITH_PRICING }),
+    loadPricingContext(),
+  ]);
 
-  return NextResponse.json({
-    updatedAt: cart?.updatedAt.toISOString() ?? null,
-    items: (cart?.items ?? []).map((i) => ({
-      productId: i.productId,
-      partNumber: i.product.partNumber,
-      name: i.product.name,
-      quantity: i.quantity,
-    })),
-  });
+  return NextResponse.json(serialiseBasket(cart?.items ?? [], ctx, cart?.updatedAt ?? null));
 }
 
 /**
@@ -90,47 +128,38 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: 'A part in that basket is no longer in the catalogue.' }, { status: 409 });
   }
 
-  const cart = await prisma.$transaction(async (tx) => {
-    const existing = await tx.cart.upsert({
-      where: { clientId: session.userId },
-      create: { clientId: session.userId },
-      update: {},
-    });
-
-    await tx.cartItem.deleteMany({
-      where: { cartId: existing.id, productId: { notIn: ids.length > 0 ? ids : ['—none—'] } },
-    });
-
-    for (const [productId, quantity] of wanted) {
-      await tx.cartItem.upsert({
-        where: { cartId_productId: { cartId: existing.id, productId } },
-        create: { cartId: existing.id, productId, quantity },
-        update: { quantity },
+  const [cart, ctx] = await Promise.all([
+    prisma.$transaction(async (tx) => {
+      const existing = await tx.cart.upsert({
+        where: { clientId: session.userId },
+        create: { clientId: session.userId },
+        update: {},
       });
-    }
 
-    // Touched explicitly: @updatedAt only fires on a write to Cart itself, and
-    // every change above was to its items. The admin's open-baskets list is
-    // ordered by this, so a basket edited today must not read as untouched.
-    return tx.cart.update({
-      where: { id: existing.id },
-      data: { updatedAt: new Date() },
-      include: {
-        items: {
-          include: { product: { select: { partNumber: true, name: true } } },
-          orderBy: { addedAt: 'asc' },
-        },
-      },
-    });
-  });
+      await tx.cartItem.deleteMany({
+        where: { cartId: existing.id, productId: { notIn: ids.length > 0 ? ids : ['—none—'] } },
+      });
 
-  return NextResponse.json({
-    updatedAt: cart.updatedAt.toISOString(),
-    items: cart.items.map((i) => ({
-      productId: i.productId,
-      partNumber: i.product.partNumber,
-      name: i.product.name,
-      quantity: i.quantity,
-    })),
-  });
+      for (const [productId, quantity] of wanted) {
+        await tx.cartItem.upsert({
+          where: { cartId_productId: { cartId: existing.id, productId } },
+          create: { cartId: existing.id, productId, quantity },
+          update: { quantity },
+        });
+      }
+
+      // Touched explicitly: @updatedAt only fires on a write to Cart itself,
+      // and every change above was to its items. The admin's open-baskets list
+      // is ordered by this, so a basket edited today must not read as
+      // untouched.
+      return tx.cart.update({
+        where: { id: existing.id },
+        data: { updatedAt: new Date() },
+        include: WITH_PRICING,
+      });
+    }),
+    loadPricingContext(),
+  ]);
+
+  return NextResponse.json(serialiseBasket(cart.items, ctx, cart.updatedAt));
 }

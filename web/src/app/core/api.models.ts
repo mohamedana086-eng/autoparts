@@ -141,3 +141,46 @@ export interface SessionUser {
   role: 'ADMIN' | 'SALES' | 'B2B' | 'RETAIL';
   tierName: string;
 }
+
+/**
+ * One line of the basket the API keeps for the signed-in account.
+ *
+ * `unitPrice` is resolved fresh on every read from the caller's own tier — the
+ * server stores ids and quantities only. It is here so a basket restored on a
+ * new device can be rendered as a basket rather than a list of part numbers.
+ */
+export interface SavedBasketLine {
+  productId: string;
+  partNumber: string;
+  name: string;
+  manufacturer: string;
+  stockDays: number;
+  unitPrice: number;
+  quantity: number;
+}
+
+export interface SavedBasket {
+  /** Null when the account has never had one. */
+  updatedAt: string | null;
+  items: SavedBasketLine[];
+}
+
+/** order | stock | account | system — narrowed by the API, free text here. */
+export type NotificationType = string;
+
+export interface AppNotification {
+  id: string;
+  type: NotificationType;
+  title: string;
+  body: string | null;
+  /** A path on this site, or null when there is nowhere to go. */
+  link: string | null;
+  /** When it was read, or null while unread. */
+  readAt: string | null;
+  createdAt: string;
+}
+
+export interface NotificationsResponse {
+  unread: number;
+  notifications: AppNotification[];
+}

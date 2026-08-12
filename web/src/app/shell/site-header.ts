@@ -4,6 +4,7 @@ import { Subject, debounceTime, distinctUntilChanged, switchMap } from 'rxjs';
 import { AuthService } from '../core/auth.service';
 import { CartService } from '../core/cart.service';
 import { CatalogService } from '../core/catalog.service';
+import { NotificationsService } from '../core/notifications.service';
 import type { ProductSummary } from '../core/api.models';
 
 @Component({
@@ -32,6 +33,23 @@ import type { ProductSummary } from '../core/api.models';
 
             @if (auth.isLoggedIn()) {
               <a routerLink="/orders" class="hover:text-paper transition-colors hidden sm:inline">Orders</a>
+
+              <a routerLink="/notifications" class="hover:text-paper transition-colors"
+                 [attr.aria-label]="notificationsLabel()">
+                <span class="relative">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                  </svg>
+                  @if (notifications.unread() > 0) {
+                    <span class="absolute -top-1.5 -right-2 bg-signal text-ink text-[10px] font-mono font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">
+                      {{ notifications.unread() > 99 ? '99+' : notifications.unread() }}
+                    </span>
+                  }
+                </span>
+              </a>
+
               <span class="hidden lg:inline text-paper text-xs">Hi, {{ firstName() }}</span>
               <button type="button" (click)="signOut()"
                       class="hover:text-paper transition-colors flex items-center gap-1.5" aria-label="Sign out">
@@ -119,6 +137,7 @@ import type { ProductSummary } from '../core/api.models';
 export class SiteHeader {
   protected readonly auth = inject(AuthService);
   protected readonly cart = inject(CartService);
+  protected readonly notifications = inject(NotificationsService);
   private readonly router = inject(Router);
   private readonly catalog = inject(CatalogService);
 
@@ -186,6 +205,11 @@ export class SiteHeader {
   protected cartLabel(): string {
     const n = this.cart.count();
     return n > 0 ? `Cart, ${n} item${n === 1 ? '' : 's'}` : 'Cart';
+  }
+
+  protected notificationsLabel(): string {
+    const n = this.notifications.unread();
+    return n > 0 ? `Notifications, ${n} unread` : 'Notifications';
   }
 
   protected submitSearch(event: Event): void {

@@ -79,13 +79,26 @@ caller's tier, so a tampered cart cannot decide what it pays, and it enforces
 the tier's minimum order amount. The cart is cleared only once the order is
 recorded.
 
+## The basket, and the copy on the server
+
+`localStorage` is still what renders: instant, works signed out, and it holds
+the display fields the API does not store. A signed-in basket is mirrored to
+`/api/cart` on top of that, which is what lets it follow the customer to
+another device and what puts it on the admin's open-baskets list.
+
+Signing in merges rather than replaces — parts added while anonymous survive,
+and a basket left on another device comes back. Where both know a part the
+larger quantity wins, not the sum, so the same basket synced twice does not
+quietly double. Signing out empties it here; the server's copy is untouched
+and returns on the next sign-in.
+
+## Notifications
+
+A bell in the header, and `/notifications`. Fetched when a session appears and
+after that only when something acts on it — there is no polling, because a
+notice from the team is not something the customer is sitting waiting on.
+
 ## Not built yet
 
 No payment step — an order is recorded as `order_is_sent` for the team to
 follow up.
-
-The API's saved-basket and notification endpoints (`/api/cart`,
-`/api/notifications`) have no caller here yet: the cart is still
-`localStorage` only, so the admin's open-baskets list stays empty, and a
-notification an admin sends has nowhere to be read. Both need wiring on
-this side.
