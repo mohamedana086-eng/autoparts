@@ -60,8 +60,12 @@ function fromServer(line: SavedBasketLine): CartItem {
  * The server's own figures win on price and description: they were resolved
  * against the tier on this request, while the local copy could be from before
  * the customer signed in, and so priced at Retail.
+ *
+ * Exported for its tests. It is the one piece of this service that is a plain
+ * function of its inputs, and the rule it encodes — union, larger quantity,
+ * server prices — is the part worth pinning down.
  */
-function mergeBaskets(local: CartItem[], server: SavedBasketLine[]): CartItem[] {
+export function mergeBaskets(local: CartItem[], server: SavedBasketLine[]): CartItem[] {
   const byId = new Map(local.map((i) => [i.id, i]));
 
   for (const line of server) {

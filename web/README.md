@@ -36,6 +36,18 @@ Prices are resolved server-side from the session, so signing in changes what
 every page shows — a BMW cooling part is €70.82 at Retail and €50.45 on the
 Price 9 tier, via the markup rule that matches.
 
+## Tests
+
+```bash
+npm test
+```
+
+Vitest, via `ng test`. `mergeBaskets` in `core/cart.service.ts` is what is
+covered: it is the one piece of the sync that is a plain function of its
+inputs, and the rule it encodes — union both baskets, take the larger
+quantity rather than the sum, trust the server's prices — is the part that
+would cost a customer a line if it were wrong.
+
 ## Deploying
 
 Two Vercel projects off one repository, both connected to it so a push to

@@ -79,6 +79,27 @@ on :4200, which proxies `/api` back here:
 npm start --prefix ../web
 ```
 
+## Tests
+
+```bash
+npm test          # once
+npm run test:watch
+```
+
+Vitest, over the pure modules in `lib/` — the pricing engine, session token
+verification, part-number normalisation and the admin validators. No database
+and no HTTP: everything covered here is a function of its arguments, which is
+why it can be pinned down exactly.
+
+Nothing that reaches Prisma is faked. A mocked client proves the mock behaves,
+not the query, so the routes are checked by running them against a real
+database instead.
+
+`lib/pricing.ts` is the one to keep covered as it changes. It decides what
+every customer pays, the order of its three steps is load-bearing — markup,
+then discount, then currency — and getting it wrong is invisible until someone
+adds up an invoice.
+
 ## Deploying to Vercel
 
 1. Provision Postgres (Neon, Vercel Postgres, Supabase — all have free
