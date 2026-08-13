@@ -257,7 +257,32 @@ const SORT_LABELS: Array<{ value: SearchSort; label: string }> = [
             <div class="grid gap-3">
               @for (p of data()!.products; track p.id) {
                 <a [routerLink]="['/product', p.id]"
-                   class="panel hover:border-signal/50 transition-colors p-4 grid grid-cols-1 md:grid-cols-[auto_1fr_auto] gap-4 items-center">
+                   class="panel hover:border-signal/50 transition-colors p-4 grid grid-cols-1 gap-4 items-center"
+                   [class]="rowColumns()">
+                  <!-- Only rendered when something in these results actually
+                       has a picture. With none — which is the whole catalogue
+                       today — a column of empty grey squares would be worse
+                       than the layout this replaces, so it simply is not
+                       there, and appears the moment a picture is uploaded. -->
+                  @if (anyImages()) {
+                    <div class="w-16 h-16 rounded-plate bg-ink-raised border border-ink-line
+                                flex items-center justify-center overflow-hidden shrink-0">
+                      @if (p.image && !failed().has(p.id)) {
+                        <img [src]="p.image.url" [alt]="p.image.alt || p.name"
+                             (error)="imageFailed(p.id)" loading="lazy" decoding="async"
+                             class="w-full h-full object-contain" />
+                      } @else {
+                        <!-- Also what a url that will not load falls back to,
+                             rather than the browser's broken-image glyph. -->
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                             stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"
+                             class="text-mute" aria-hidden="true">
+                          <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>
+                        </svg>
+                      }
+                    </div>
+                  }
+
                   <div class="plate relative rounded-plate px-4 py-2 w-fit">
                     <p class="text-[9px] text-mute uppercase tracking-wider">{{ p.manufacturer }}</p>
                     <p class="font-mono font-semibold text-sm">{{ p.partNumber }}</p>
@@ -346,6 +371,43 @@ export class SearchPage {
   protected readonly error = signal<string | null>(null);
   protected readonly query = signal('');
   protected readonly skeletons = Array.from({ length: 3 }, (_, i) => i);
+
+  /**
+   * Whether anything in these results has a picture.
+   *
+   * Decided per result set rather than per row so the rows stay aligned: once
+   * one part has a picture every row gets the column, and the ones without it
+   * show a placeholder. When none do, the column is dropped entirely and the
+   * layout is exactly what it was before pictures existed.
+   */
+  protected readonly anyImages = computed(() =>
+    (this.data()?.products ?? []).some((p) => !!p.image)
+  );
+
+  /** The row's grid template, which depends on whether there is a picture column. */
+  protected readonly rowColumns = computed(() =>
+    this.anyImages()
+      ? 'md:grid-cols-[auto_auto_1fr_auto]'
+      : 'md:grid-cols-[auto_1fr_auto]'
+  );
+
+  /**
+   * Parts whose picture url did not load.
+   *
+   * An admin can enter any http(s) url and nothing here can check it resolves,
+   * so a dead link is a normal outcome rather than an error. Recording it
+   * swaps that row to the placeholder instead of leaving the browser's broken
+   * -image glyph in a catalogue.
+   */
+  private readonly failedImages = signal<ReadonlySet<string>>(new Set());
+  protected readonly failed = this.failedImages.asReadonly();
+
+  protected imageFailed(productId: string): void {
+    this.failedImages.update((prev) => {
+      if (prev.has(productId)) return prev;
+      return new Set(prev).add(productId);
+    });
+  }
   protected readonly sorts = SORT_LABELS;
   protected readonly minPrice = signal('');
   protected readonly maxPrice = signal('');

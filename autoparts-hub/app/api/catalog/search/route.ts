@@ -121,6 +121,12 @@ export async function GET(req: NextRequest) {
     ...PRICED_PRODUCT_INCLUDE,
     interchanges: true,
     supplier: true,
+    // The leading picture only. Order alone decides which one that is — see
+    // ProductImage in the schema — so the first by sortOrder is the primary,
+    // and a result row has no use for the rest. Taken as part of this query
+    // rather than looked up per row, which at fifty results would be fifty
+    // round trips to render one thumbnail each.
+    images: { orderBy: { sortOrder: 'asc' as const }, take: 1, select: { url: true, alt: true } },
   } as const;
 
   // A vehicle narrows the catalogue to what actually fits it, and composes
@@ -321,6 +327,10 @@ export async function GET(req: NextRequest) {
           stockDays: p.stockDays,
           price: pricing?.finalPrice ?? p.basePrice,
           appliedRule: pricing?.appliedRule ?? null,
+          // Null where nobody has added a picture, which today is every part.
+          // The alt falls back to the part's name at the point it is rendered,
+          // as the schema says it should.
+          image: p.images[0] ? { url: p.images[0].url, alt: p.images[0].alt } : null,
           // Carried on the row so a result can show who it comes from and how
           // they rate, which is what makes the rating filter legible.
           supplier: p.supplier

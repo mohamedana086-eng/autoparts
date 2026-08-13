@@ -31,6 +31,13 @@ export interface SupplierRef {
   acceptsReturns?: boolean | null;
 }
 
+/** A part's leading picture. Order decides which one that is — see the schema. */
+export interface ProductImageRef {
+  url: string;
+  /** Null falls back to the part's name wherever it is rendered. */
+  alt: string | null;
+}
+
 export interface ProductSummary {
   id: string;
   partNumber: string;
@@ -41,6 +48,8 @@ export interface ProductSummary {
   stockDays: number;
   price: number;
   appliedRule: string | null;
+  /** Null when nobody has added a picture of this part. */
+  image?: ProductImageRef | null;
   /** Who the part is bought from, and how they rate. Null when unsourced. */
   supplier?: SupplierRef | null;
   /** Why this row came back, so the UI can explain non-obvious hits. */
