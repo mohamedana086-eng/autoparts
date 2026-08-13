@@ -100,6 +100,20 @@ export interface MarkupRulesResponse {
   systems: { slug: string; name: string }[];
 }
 
+/** One part on an order, as the admin list reports it. */
+export interface AdminOrderLine {
+  productId: string;
+  partNumber: string;
+  name: string;
+  manufacturer: string;
+  /** The vehicle system it belongs to — what kind of part this is. */
+  system: string;
+  quantity: number;
+  /** Base currency, matching `AdminOrder.total` rather than the quoted sum. */
+  unitPrice: number;
+  lineTotal: number;
+}
+
 export interface AdminOrder {
   id: string;
   reference: string;
@@ -107,7 +121,10 @@ export interface AdminOrder {
   status: string;
   createdAt: string;
   units: number;
+  /** Distinct parts. `units` alone cannot tell four of one from one of four. */
+  lineCount: number;
   total: number;
+  lines: AdminOrderLine[];
 }
 
 export const ORDER_STATUSES = ['order_is_sent', 'processing', 'shipped', 'paid'] as const;
