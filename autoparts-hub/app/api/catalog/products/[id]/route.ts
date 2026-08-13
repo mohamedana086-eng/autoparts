@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { loadPricingContext, priceFor, PRICED_PRODUCT_INCLUDE } from '@/lib/catalog';
+import {
+  availabilityOf, loadPricingContext, priceFor, PRICED_PRODUCT_INCLUDE, STOCK_INCLUDE,
+} from '@/lib/catalog';
 
 // GET /api/catalog/products/<id> — detail view, priced for the caller's tier.
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
@@ -14,6 +16,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       // A part carries at most twelve and this is the page with room to show
       // them; sortOrder is the order they were arranged in.
       images: { orderBy: { sortOrder: 'asc' }, select: { url: true, alt: true } },
+      ...STOCK_INCLUDE,
     },
   });
 
@@ -41,6 +44,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       // Empty where nobody has added any, which today is every part. The alt
       // falls back to the part's name where it is rendered, per the schema.
       images: product.images.map((i) => ({ url: i.url, alt: i.alt })),
+      available: availabilityOf(product),
       supplier: product.supplier
         ? {
             slug: product.supplier.slug,

@@ -47,6 +47,13 @@ Actions were relying on a layout redirect that does not gate them.
   warehouses existed. Only a counted part is held to a figure. Reading an
   absent row as zero would take every uncounted part off sale.
 
+  The storefront says the same three things, through `availabilityOf()`:
+  a counted part with stock shows the number, a counted part with none shows
+  "Out of stock", and an uncounted part shows its lead time and makes no
+  claim about stock at all. Availability counts only warehouses that can be
+  picked from — the same restriction `reserveStock` applies — so a page and
+  a checkout cannot disagree about whether a part can be had.
+
 - **Purchase price lists** — `lib/price-lists.ts`, `/api/admin/price-lists`.
   What a part costs to buy, as a list with a source and a date rather than a
   number sitting on the part. Upload as many as you like — several covering

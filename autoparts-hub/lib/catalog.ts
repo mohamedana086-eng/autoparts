@@ -134,6 +134,43 @@ export function purchasePriceOf(product: PurchasePriced): number {
   return product.priceListItems?.[0]?.price ?? product.basePrice;
 }
 
+/**
+ * What a catalogue query must load to say whether a part is available.
+ *
+ * Restricted to active warehouses, which is the same restriction
+ * `reserveStock` applies when an order actually draws stock down. The two have
+ * to agree: a page that says "out of stock" while checkout sells the part, or
+ * the reverse, is worse than either page alone.
+ */
+export const STOCK_INCLUDE = {
+  stock: {
+    where: { warehouse: { active: true } },
+    select: { quantity: true, reserved: true },
+  },
+} as const;
+
+export interface StockCounted {
+  stock?: { quantity: number; reserved: number }[];
+}
+
+/**
+ * How many can be sold, or null where that is not a question with an answer.
+ *
+ * Null means nobody has counted this part into a warehouse that can be picked
+ * from — untracked, which is not the same as none left. The catalogue sold on
+ * `Product.stockDays` alone before warehouses existed and still does for every
+ * part nobody has counted, so the honest thing to show is the lead time and no
+ * claim about stock at all. Zero means someone did count, and there are none.
+ *
+ * `quantity - reserved` rather than `quantity`, because what is promised to an
+ * order that has not shipped is not available to sell twice.
+ */
+export function availabilityOf(product: StockCounted): number | null {
+  if (!product.stock || product.stock.length === 0) return null;
+
+  return product.stock.reduce((sum, s) => sum + (s.quantity - s.reserved), 0);
+}
+
 export function priceFor(product: PriceableProduct, ctx: PricingContext): PriceResult | null {
   if (!ctx.category) return null;
 

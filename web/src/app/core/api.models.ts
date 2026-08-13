@@ -50,6 +50,15 @@ export interface ProductSummary {
   appliedRule: string | null;
   /** Null when nobody has added a picture of this part. */
   image?: ProductImageRef | null;
+  /**
+   * Units that can be sold today, across warehouses that can be picked from.
+   *
+   * Null is not zero: it means nobody has counted this part into a warehouse,
+   * so there is no figure to show and the part sells on its lead time the way
+   * the whole catalogue did before stock was tracked. Zero means someone
+   * counted and there are none.
+   */
+  available?: number | null;
   /** Who the part is bought from, and how they rate. Null when unsourced. */
   supplier?: SupplierRef | null;
   /** Why this row came back, so the UI can explain non-obvious hits. */

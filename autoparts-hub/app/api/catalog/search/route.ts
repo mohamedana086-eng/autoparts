@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import {
-  idsByFuzzyMatch, idsMatchingNormalisedPartNumber, loadPricingContext, normalisePartNumber, priceFor,
-  PRICED_PRODUCT_INCLUDE,
+  availabilityOf, idsByFuzzyMatch, idsMatchingNormalisedPartNumber, loadPricingContext,
+  normalisePartNumber, priceFor, PRICED_PRODUCT_INCLUDE, STOCK_INCLUDE,
 } from '@/lib/catalog';
 import { RELIABILITIES, isReliability } from '@/lib/supplier-classification';
 
@@ -127,6 +127,7 @@ export async function GET(req: NextRequest) {
     // rather than looked up per row, which at fifty results would be fifty
     // round trips to render one thumbnail each.
     images: { orderBy: { sortOrder: 'asc' as const }, take: 1, select: { url: true, alt: true } },
+    ...STOCK_INCLUDE,
   } as const;
 
   // A vehicle narrows the catalogue to what actually fits it, and composes
@@ -331,6 +332,9 @@ export async function GET(req: NextRequest) {
           // The alt falls back to the part's name at the point it is rendered,
           // as the schema says it should.
           image: p.images[0] ? { url: p.images[0].url, alt: p.images[0].alt } : null,
+          // Null where nobody has counted this part in — not the same as none
+          // left, and rendered as the lead time with no stock claim at all.
+          available: availabilityOf(p),
           // Carried on the row so a result can show who it comes from and how
           // they rate, which is what makes the rating filter legible.
           supplier: p.supplier

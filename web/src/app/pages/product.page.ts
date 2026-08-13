@@ -102,13 +102,30 @@ import type { ProductResponse } from '../core/api.models';
             </p>
           }
 
-          <div class="grid grid-cols-2 gap-3 mt-6 text-center">
+          <!-- One box when nothing has been counted, two when it has: an
+               empty "stock" panel saying nothing is worse than not being
+               there, and the delivery time already answers the question a
+               customer is asking. -->
+          <div class="grid gap-3 mt-6 text-center"
+               [class]="counted() ? 'grid-cols-2' : 'grid-cols-1'">
             <div class="border border-ink-line rounded-plate py-3">
+              <p class="text-[10px] text-mute uppercase">Delivery</p>
               <p class="text-xs font-mono">{{ product().stockDays }} day{{ product().stockDays === 1 ? '' : 's' }}</p>
             </div>
-            <div class="border border-ink-line rounded-plate py-3">
-              <p class="text-xs font-mono text-stock">In stock</p>
-            </div>
+            @if (counted()) {
+              <div class="border border-ink-line rounded-plate py-3">
+                <p class="text-[10px] text-mute uppercase">Stock</p>
+                @if (product().available! > 0) {
+                  <p class="text-xs font-mono text-stock">{{ product().available }} available</p>
+                } @else {
+                  <!-- Not "on order": a counted part with none left is refused
+                       outright at checkout — see reserveStock — so promising a
+                       backorder here would be a promise the system does not
+                       keep. -->
+                  <p class="text-xs font-mono text-alert">Out of stock</p>
+                }
+              </div>
+            }
           </div>
 
           <button type="button" (click)="addToCart()"
@@ -157,6 +174,13 @@ export class ProductPage {
   protected readonly usableImages = computed(() => {
     const failed = this.failedImages();
     return (this.data()?.product.images ?? []).filter((i) => !failed.has(i.url));
+  });
+
+  /** Whether anyone has counted this part into a warehouse at all. Null means
+   *  not, which is a different thing from none left — see the API model. */
+  protected readonly counted = computed(() => {
+    const available = this.data()?.product.available;
+    return available !== null && available !== undefined;
   });
 
   protected readonly selectedIndex = signal(0);

@@ -311,7 +311,22 @@ const SORT_LABELS: Array<{ value: SearchSort; label: string }> = [
 
                     <div class="flex flex-wrap items-center gap-3 mt-2 text-xs text-mute">
                       <span>{{ p.stockDays }} day{{ p.stockDays === 1 ? '' : 's' }} delivery</span>
-                      <span class="text-stock">In stock</span>
+                      <!-- Three cases, and the third is not a version of the
+                           other two: counted and available, counted and gone,
+                           or never counted — in which case the lead time
+                           beside this already says everything that is known,
+                           and claiming anything about stock would be a
+                           guess. -->
+                      @if (p.available !== null && p.available !== undefined) {
+                        @if (p.available > 0) {
+                          <span class="text-stock">{{ p.available }} in stock</span>
+                        } @else {
+                          <!-- Plainly out, not "on order": checkout refuses a
+                               counted part with none left rather than taking
+                               a backorder for it. -->
+                          <span class="text-alert">Out of stock</span>
+                        }
+                      }
                       @if (p.supplier; as supplier) {
                         <app-supplier-rating
                           [rating]="supplier.rating"
