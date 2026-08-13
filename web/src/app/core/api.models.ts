@@ -136,6 +136,11 @@ export interface ProductDetail extends ProductSummary {
   description: string | null;
   interchanges: Interchange[];
   supplier: SupplierRef | null;
+  /**
+   * Every picture of the part, in the order they were arranged. Empty where
+   * nobody has added one. The first leads, the same rule search follows.
+   */
+  images: ProductImageRef[];
 }
 
 export interface ProductResponse {

@@ -6,7 +6,15 @@ import { loadPricingContext, priceFor, PRICED_PRODUCT_INCLUDE } from '@/lib/cata
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   const product = await prisma.product.findUnique({
     where: { id: params.id },
-    include: { ...PRICED_PRODUCT_INCLUDE, interchanges: true, supplier: true },
+    include: {
+      ...PRICED_PRODUCT_INCLUDE,
+      interchanges: true,
+      supplier: true,
+      // All of them here, unlike search, which needs only the one that leads.
+      // A part carries at most twelve and this is the page with room to show
+      // them; sortOrder is the order they were arranged in.
+      images: { orderBy: { sortOrder: 'asc' }, select: { url: true, alt: true } },
+    },
   });
 
   if (!product) {
@@ -30,6 +38,9 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       stockDays: product.stockDays,
       price: pricing?.finalPrice ?? product.basePrice,
       appliedRule: pricing?.appliedRule ?? null,
+      // Empty where nobody has added any, which today is every part. The alt
+      // falls back to the part's name where it is rendered, per the schema.
+      images: product.images.map((i) => ({ url: i.url, alt: i.alt })),
       supplier: product.supplier
         ? {
             slug: product.supplier.slug,

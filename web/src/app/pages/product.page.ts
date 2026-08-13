@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { CatalogService } from '../core/catalog.service';
 import { CartService } from '../core/cart.service';
@@ -22,6 +22,36 @@ import type { ProductResponse } from '../core/api.models';
     } @else {
       <div class="max-w-5xl mx-auto px-6 py-10 grid md:grid-cols-[1.3fr_1fr] gap-10">
         <div>
+          <!-- Nothing at all when the part has no picture, rather than a large
+               empty frame where one would be. Today that is every part. -->
+          @if (usableImages().length > 0) {
+            <div class="mb-6">
+              <div class="panel rounded-plate overflow-hidden aspect-[4/3] flex items-center justify-center bg-ink-raised">
+                <img [src]="selected().url" [alt]="selected().alt || product().name"
+                     (error)="imageFailed(selected().url)" decoding="async"
+                     class="w-full h-full object-contain" />
+              </div>
+
+              <!-- Only worth a strip when there is a choice to make. -->
+              @if (usableImages().length > 1) {
+                <div class="flex flex-wrap gap-2 mt-3">
+                  @for (img of usableImages(); track img.url) {
+                    <button type="button" (click)="selectedIndex.set($index)"
+                            [attr.aria-label]="'Picture ' + ($index + 1) + ' of ' + usableImages().length"
+                            [attr.aria-current]="$index === selectedIndex()"
+                            class="w-14 h-14 rounded-plate overflow-hidden border transition-colors bg-ink-raised
+                                   flex items-center justify-center"
+                            [class]="$index === selectedIndex() ? 'border-signal' : 'border-ink-line hover:border-mute'">
+                      <img [src]="img.url" [alt]="img.alt || product().name"
+                           (error)="imageFailed(img.url)" loading="lazy" decoding="async"
+                           class="w-full h-full object-contain" />
+                    </button>
+                  }
+                </div>
+              }
+            </div>
+          }
+
           <div class="plate relative rounded-plate px-5 py-4 w-fit mb-6">
             <p class="text-[10px] text-mute uppercase tracking-wider">{{ product().manufacturer }}</p>
             <p class="font-mono text-2xl font-bold">{{ product().partNumber }}</p>
@@ -112,6 +142,36 @@ export class ProductPage {
   protected readonly error = signal<string | null>(null);
   protected readonly added = signal(false);
 
+  /**
+   * Pictures whose url would not load.
+   *
+   * Kept by url rather than by index because dropping one shifts every index
+   * after it, and the selection is an index. An admin can enter any http(s)
+   * address and nothing can check it still resolves, so a dead link is an
+   * ordinary outcome — the gallery simply carries on without it, and if that
+   * was the last one the whole block disappears the way it does for a part
+   * that never had a picture.
+   */
+  private readonly failedImages = signal<ReadonlySet<string>>(new Set());
+
+  protected readonly usableImages = computed(() => {
+    const failed = this.failedImages();
+    return (this.data()?.product.images ?? []).filter((i) => !failed.has(i.url));
+  });
+
+  protected readonly selectedIndex = signal(0);
+
+  /** The picture on show. Clamped, since a failure can shorten the list under
+   *  a selection that was valid a moment ago. */
+  protected readonly selected = computed(() => {
+    const images = this.usableImages();
+    return images[Math.min(this.selectedIndex(), images.length - 1)] ?? images[0];
+  });
+
+  protected imageFailed(url: string): void {
+    this.failedImages.update((prev) => (prev.has(url) ? prev : new Set(prev).add(url)));
+  }
+
   private resetTimer?: ReturnType<typeof setTimeout>;
 
   constructor() {
@@ -120,6 +180,10 @@ export class ProductPage {
       if (!id) return;
       this.loading.set(true);
       this.error.set(null);
+      // A different part starts on its own first picture, and inherits none of
+      // the previous one's dead links.
+      this.selectedIndex.set(0);
+      this.failedImages.set(new Set());
 
       this.catalog.product(id).subscribe({
         next: (res) => {
