@@ -1,4 +1,5 @@
 import 'server-only';
+import { isSitePath } from '@/lib/site-link';
 
 /**
  * Shared shapes and validation for the admin product endpoints.
@@ -102,7 +103,10 @@ export function readImageRows(body: Record<string, unknown>):
     // http(s) or a site-relative path. Anything else — data:, javascript:,
     // blob: — ends up in an <img src> on a public page, so it is refused here
     // rather than sanitised at each of the places that render it.
-    const allowed = /^https?:\/\//i.test(url) || url.startsWith('/');
+    //
+    // isSitePath rather than startsWith('/'), which also accepted //evil.example
+    // — a path by its first character and an off-site url to a browser.
+    const allowed = /^https?:\/\//i.test(url) || isSitePath(url);
     if (!allowed) {
       return { ok: false, error: 'An image url must start with http://, https:// or /.' };
     }

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { requireAdmin } from '@/lib/admin-guard';
+import { isSitePath } from '@/lib/site-link';
 
 // Not exported: Next only lets a route module export its handlers and a fixed
 // set of config names, and exporting anything else breaks the generated route
@@ -67,7 +68,10 @@ export async function POST(req: Request) {
   // Site-relative only. A notification is rendered as a link the recipient
   // clicks, and an off-site destination typed into an admin box is the shape
   // of a phishing link even when nobody meant it that way.
-  if (link && !link.startsWith('/')) {
+  //
+  // This used to be startsWith('/'), which let //evil.example straight through
+  // — off-site by every browser's reading, and the exact thing being refused.
+  if (link && !isSitePath(link)) {
     return NextResponse.json(
       { error: 'A link must be a path on this site, starting with /.' },
       { status: 400 }

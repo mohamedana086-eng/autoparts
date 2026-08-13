@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readStockRows, readWarehouseInput } from '@/lib/admin-inventory';
 import { readImageRows, readProductInput } from '@/lib/admin-products';
 import { normalisePartNumber } from '@/lib/part-number';
+import { isSitePath } from '@/lib/site-link';
 import { isReliability, RELIABILITIES } from '@/lib/supplier-classification';
 
 /**
@@ -163,12 +164,12 @@ describe('product images', () => {
     expect(err(readImageRows({ images: [{ url: 'blob:abc' }] }))).toMatch(/must start/);
   });
 
-  // The check is `url.startsWith('/')`, and a protocol-relative URL starts
-  // with '/' too — so //evil.com/a.jpg is accepted and the browser fetches it
-  // off-site, which is exactly what the scheme check above exists to stop.
-  // Left failing-by-omission rather than asserted as correct: writing the
-  // current behaviour into a test would make the bug the specification.
-  it.todo('refuses a protocol-relative url such as //evil.com/a.jpg');
+  it('refuses a protocol-relative url dressed as a path', () => {
+    // Starts with '/', so the old startsWith('/') check waved it through, and
+    // the browser then fetched it off-site.
+    expect(err(readImageRows({ images: [{ url: '//evil.example/a.jpg' }] }))).toMatch(/must start/);
+    expect(err(readImageRows({ images: [{ url: '/\\evil.example/a.jpg' }] }))).toMatch(/must start/);
+  });
 
   it('caps how many pictures a part can carry', () => {
     const many = Array.from({ length: 13 }, (_, i) => ({ url: `/img/${i}.jpg` }));
@@ -206,6 +207,36 @@ describe('part numbers', () => {
   it('survives a string with nothing usable in it', () => {
     expect(normalisePartNumber('---')).toBe('');
     expect(normalisePartNumber('')).toBe('');
+  });
+});
+
+describe('site paths', () => {
+  it('accepts a path on this site', () => {
+    expect(isSitePath('/')).toBe(true);
+    expect(isSitePath('/cart')).toBe(true);
+    expect(isSitePath('/orders?ref=APH-1')).toBe(true);
+    expect(isSitePath('/product/abc#specs')).toBe(true);
+  });
+
+  it('refuses a protocol-relative url, which reads as a path but is not one', () => {
+    // The whole reason this function exists. Every one of these begins with
+    // '/', and every one of them leaves the site.
+    expect(isSitePath('//evil.example')).toBe(false);
+    expect(isSitePath('//evil.example/orders')).toBe(false);
+  });
+
+  it('refuses the backslash form of the same trick', () => {
+    // The URL standard treats \ as / in the authority position.
+    expect(isSitePath('/\\evil.example')).toBe(false);
+    expect(isSitePath('/\\/evil.example')).toBe(false);
+  });
+
+  it('refuses anything that is not a path at all', () => {
+    expect(isSitePath('https://evil.example')).toBe(false);
+    expect(isSitePath('javascript:alert(1)')).toBe(false);
+    expect(isSitePath('evil.example')).toBe(false);
+    expect(isSitePath('\\\\evil.example')).toBe(false);
+    expect(isSitePath('')).toBe(false);
   });
 });
 
