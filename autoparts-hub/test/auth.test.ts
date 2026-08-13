@@ -16,7 +16,9 @@ import crypto from 'node:crypto';
 const SECRET = 'test-secret-not-the-placeholder';
 process.env.AUTH_SECRET = SECRET;
 
-const { decodeSession, toRole } = await import('@/lib/auth');
+const { decodeSession, toRole, resolveAuthSecret } = await import('@/lib/auth');
+
+const PLACEHOLDER = 'dev-only-insecure-secret-change-me';
 
 const sign = (data: string) =>
   crypto.createHmac('sha256', SECRET).update(data).digest('base64url');
@@ -89,6 +91,49 @@ describe('decodeSession', () => {
     const body = Buffer.from('not json at all').toString('base64url');
 
     expect(decodeSession(`${body}.${sign(body)}`)).toBeNull();
+  });
+});
+
+describe('resolveAuthSecret', () => {
+  const good = 'a'.repeat(64);
+
+  it('takes what is configured in production', () => {
+    expect(resolveAuthSecret(good, 'production')).toBe(good);
+  });
+
+  it('refuses to sign with nothing in production', () => {
+    // Silently falling back is how a deployment ends up forgeable without
+    // anyone doing something visibly wrong.
+    expect(() => resolveAuthSecret(undefined, 'production')).toThrow(/not set/);
+    expect(() => resolveAuthSecret('', 'production')).toThrow(/not set/);
+  });
+
+  it('refuses the placeholder in production', () => {
+    // The likeliest mistake by far: .env.example ships this value and the
+    // README's first step is to copy that file.
+    expect(() => resolveAuthSecret(PLACEHOLDER, 'production')).toThrow(/\.env\.example/);
+  });
+
+  it('refuses a secret too short to be worth having', () => {
+    expect(() => resolveAuthSecret('short', 'production')).toThrow(/5 characters/);
+    expect(() => resolveAuthSecret('a'.repeat(31), 'production')).toThrow(/31 characters/);
+    expect(resolveAuthSecret('a'.repeat(32), 'production')).toBe('a'.repeat(32));
+  });
+
+  it('says how to generate one, whichever way it refused', () => {
+    for (const bad of [undefined, PLACEHOLDER, 'short']) {
+      expect(() => resolveAuthSecret(bad, 'production')).toThrow(/openssl rand -hex 32/);
+    }
+  });
+
+  it('leaves development alone', () => {
+    // A local app that will not start until you invent a secret is a worse
+    // first five minutes for no gain — nothing local is exposed.
+    expect(resolveAuthSecret(undefined, 'development')).toBe(PLACEHOLDER);
+    expect(resolveAuthSecret(PLACEHOLDER, 'development')).toBe(PLACEHOLDER);
+    expect(resolveAuthSecret('short', 'development')).toBe('short');
+    expect(resolveAuthSecret(undefined, undefined)).toBe(PLACEHOLDER);
+    expect(resolveAuthSecret(undefined, 'test')).toBe(PLACEHOLDER);
   });
 });
 

@@ -108,8 +108,11 @@ adds up an invoice.
    defaults are correct.
 3. Set two environment variables in the Vercel project:
    - `DATABASE_URL` — the pooled connection string
-   - `AUTH_SECRET` — a fresh `openssl rand -hex 32`. Do **not** reuse the
-     dev placeholder; anyone who knows it can forge session cookies.
+   - `AUTH_SECRET` — a fresh `openssl rand -hex 32`. The app refuses to
+     start signing without it: in production, an unset, placeholder or
+     under-32-character secret throws on the first request that touches a
+     session rather than quietly signing forgeable cookies. The build is
+     unaffected, so this surfaces on the deployment, not in CI.
 4. Create the schema once, from your machine, with `DATABASE_URL`
    pointing at the hosted database: `npm run db:deploy` — then
    `npm run db:seed` for the sample catalog and accounts.
@@ -198,9 +201,14 @@ and a fitment pointing outside the imported tree.
 
 ## Notes / next steps
 
-- Set a real `AUTH_SECRET` in `.env` before deploying — anyone who
-  knows the dev placeholder value could forge session cookies.
 - No password-reset flow yet.
+- A session carries its `role` and `categoryId` in the cookie for seven
+  days and there is no revocation, so demoting an admin, or moving a
+  customer to another pricing tier, does not take effect until they sign
+  in again. The account's discount and currency are already read fresh
+  from the database on every request; these two are not.
+- Nothing rate-limits `/api/auth/login`. bcrypt makes guessing slow, not
+  impossible.
 - The seeded accounts above are real working logins. Delete them before
   the deployment is public, especially the Admin one.
 - The seeded catalog/interchange data is a small hand-written sample. The

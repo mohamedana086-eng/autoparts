@@ -13,7 +13,79 @@ export function toRole(value: string | null | undefined): Role {
   return value === 'ADMIN' || value === 'SALES' || value === 'B2B' ? value : 'RETAIL';
 }
 
-const SECRET = process.env.AUTH_SECRET || 'dev-only-insecure-secret-change-me';
+/**
+ * The value `.env.example` ships with, and what development falls back to.
+ *
+ * It is published — it is in the example file, the README and the git history
+ * — so it is a secret in name only. Anyone who has seen this repository can
+ * mint an ADMIN cookie for any deployment still signing with it.
+ */
+const DEV_PLACEHOLDER = 'dev-only-insecure-secret-change-me';
+
+/**
+ * `openssl rand -hex 32`, the command the README gives, produces 64
+ * characters. The floor is set well under that so a different but sound
+ * generator is not refused, and well over anything worth guessing at.
+ */
+const MIN_SECRET_LENGTH = 32;
+
+/**
+ * The signing key, or a refusal to start signing with a known one.
+ *
+ * Development keeps the placeholder, because a local app that will not run
+ * until you invent a secret is a worse first five minutes for no gain. In
+ * production the three ways to end up forgeable — unset, still the example
+ * value, or something too short to matter — all stop here instead.
+ *
+ * Pure, and exported, so the rules can be tested without a process to set
+ * environment variables on.
+ */
+export function resolveAuthSecret(
+  configured: string | undefined,
+  nodeEnv: string | undefined
+): string {
+  if (nodeEnv !== 'production') return configured || DEV_PLACEHOLDER;
+
+  if (!configured) {
+    throw new Error(
+      'AUTH_SECRET is not set. Sessions would be signed with a published ' +
+        'placeholder, so anyone could forge an admin cookie. Generate one ' +
+        'with `openssl rand -hex 32`.'
+    );
+  }
+  if (configured === DEV_PLACEHOLDER) {
+    throw new Error(
+      'AUTH_SECRET is still the value from .env.example, which is published ' +
+        'and lets anyone forge an admin cookie. Generate one with ' +
+        '`openssl rand -hex 32`.'
+    );
+  }
+  if (configured.length < MIN_SECRET_LENGTH) {
+    throw new Error(
+      `AUTH_SECRET is ${configured.length} characters; ${MIN_SECRET_LENGTH} is ` +
+        'the minimum. Generate one with `openssl rand -hex 32`.'
+    );
+  }
+
+  return configured;
+}
+
+/**
+ * Resolved on first use rather than at import.
+ *
+ * `next build` runs with NODE_ENV=production, so checking at module load
+ * would make a build fail wherever the secret is not also a build-time
+ * variable — the same coupling the README deliberately avoids for the
+ * database. Checking here means the failure lands on the first request that
+ * touches a session instead, which is a signing attempt, which is exactly
+ * where it belongs.
+ */
+let resolvedSecret: string | null = null;
+
+function secret(): string {
+  return (resolvedSecret ??= resolveAuthSecret(process.env.AUTH_SECRET, process.env.NODE_ENV));
+}
+
 export const SESSION_COOKIE = 'aph_session';
 const MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // 7 days
 
@@ -38,7 +110,7 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 // ---- signed session token (HMAC — no external JWT dep needed) ----
 
 function sign(data: string): string {
-  return crypto.createHmac('sha256', SECRET).update(data).digest('base64url');
+  return crypto.createHmac('sha256', secret()).update(data).digest('base64url');
 }
 
 function encodeSession(payload: SessionPayload): string {
