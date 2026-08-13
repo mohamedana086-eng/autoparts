@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { requireStaff } from '@/lib/admin-guard';
+import { purchasePriceOf } from '@/lib/catalog';
 
 /**
  * GET /api/admin/carts — baskets that were filled and never ordered.
@@ -27,7 +28,22 @@ export async function GET() {
     include: {
       client: { select: { id: true, name: true, email: true } },
       items: {
-        include: { product: { select: { partNumber: true, name: true, basePrice: true } } },
+        include: {
+          product: {
+            select: {
+              partNumber: true,
+              name: true,
+              basePrice: true,
+              // Same fallback as everywhere else: the active list where it
+              // covers the part, the part's own price where it does not.
+              priceListItems: {
+                where: { priceList: { active: true } },
+                select: { price: true },
+                take: 1,
+              },
+            },
+          },
+        },
         orderBy: { addedAt: 'asc' },
       },
     },
@@ -45,7 +61,7 @@ export async function GET() {
       clientEmail: cart.client.email,
       updatedAt: cart.updatedAt.toISOString(),
       units: cart.items.reduce((sum, i) => sum + i.quantity, 0),
-      cost: cart.items.reduce((sum, i) => sum + i.quantity * i.product.basePrice, 0),
+      cost: cart.items.reduce((sum, i) => sum + i.quantity * purchasePriceOf(i.product), 0),
       items: cart.items.map((i) => ({
         productId: i.productId,
         partNumber: i.product.partNumber,

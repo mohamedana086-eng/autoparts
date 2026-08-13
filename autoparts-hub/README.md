@@ -47,6 +47,19 @@ Actions were relying on a layout redirect that does not gate them.
   warehouses existed. Only a counted part is held to a figure. Reading an
   absent row as zero would take every uncounted part off sale.
 
+- **Purchase price lists** — `lib/price-lists.ts`, `/api/admin/price-lists`.
+  What a part costs to buy, as a list with a source and a date rather than a
+  number sitting on the part. Upload as many as you like — several covering
+  the same parts is the point — but **at most one is active**, enforced by a
+  partial unique index rather than by route code, and switching one on stands
+  the other down in the same transaction. A part the active list does not
+  mention keeps its own `basePrice`, so a list covering half the catalogue
+  reprices half of it and takes nothing off sale. Uploads arrive inactive:
+  loading a file and changing every price are two decisions. Prices quoted in
+  another currency are converted on the way in — dividing by the rate, since
+  a rate is units-per-base — and the original is kept beside the converted
+  figure so it can be checked against the supplier's own paperwork.
+
 - **Pricing engine** — `lib/pricing.ts`. Given a product + client, it
   finds the most specific active markup rule that matches and applies it
   (percent / flat amount / fixed price), falling back to the client's

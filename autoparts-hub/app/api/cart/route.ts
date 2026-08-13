@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
-import { loadPricingContext, priceFor, type PricingContext } from '@/lib/catalog';
+import {
+  loadPricingContext, priceFor, purchasePriceOf, PRICED_PRODUCT_INCLUDE, type PricingContext,
+} from '@/lib/catalog';
 
 /** Every basket line the API returns, from either verb. Not exported: a route
  *  module may only export its handlers, so this stays local — the same
@@ -16,13 +18,14 @@ type BasketLine = {
     stockDays: number;
     manufacturer: { name: string };
     vehicleSystem: { slug: string };
+    priceListItems?: { price: number }[];
   };
 };
 
 /** What the product rows a basket line needs look like, for both queries. */
 const WITH_PRICING = {
   items: {
-    include: { product: { include: { manufacturer: true, vehicleSystem: true } } },
+    include: { product: { include: PRICED_PRODUCT_INCLUDE } },
     orderBy: { addedAt: 'asc' as const },
   },
 } as const;
@@ -42,7 +45,7 @@ function serialiseBasket(
       stockDays: i.product.stockDays,
       // Falls back to the purchase price only when no tier resolves at all,
       // which is the same fallback the order endpoint uses.
-      unitPrice: priceFor(i.product, ctx)?.finalPrice ?? i.product.basePrice,
+      unitPrice: priceFor(i.product, ctx)?.finalPrice ?? purchasePriceOf(i.product),
       quantity: i.quantity,
     })),
   };

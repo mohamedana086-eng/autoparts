@@ -55,6 +55,10 @@ export const routes: Routes = [
         path: 'markup-rules',
         loadComponent: () => import('./admin/markup-rules.page').then((m) => m.AdminMarkupRulesPage),
       },
+      {
+        path: 'price-lists',
+        loadComponent: () => import('./admin/price-lists.page').then((m) => m.AdminPriceListsPage),
+      },
       { path: 'orders', loadComponent: () => import('./admin/orders.page').then((m) => m.AdminOrdersPage) },
     ],
   },

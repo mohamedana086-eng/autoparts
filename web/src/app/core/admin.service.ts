@@ -4,8 +4,10 @@ import { firstValueFrom } from 'rxjs';
 import type {
   AdminCart, AdminClient, AdminCurrency, AdminNotification, AdminOrder, AdminOutlet, AdminProduct,
   AdminStats, AdminSupplier, AdminWarehouse, ClientCategory, ClientInput, ClientsResponse,
+  AdminPriceList, AdminPriceListItem,
   CurrencyInput, ImageInput, MarkupRule, MarkupRulesResponse, NotificationInput,
-  NotificationsResponse, OutletInput, OutletsResponse, ProductImage, ProductInput, ProductsResponse,
+  NotificationsResponse, OutletInput, OutletsResponse, PriceListUploadInput, PriceListUploadResult,
+  ProductImage, ProductInput, ProductsResponse,
   StockLevel, StockRowInput, SupplierInput, SuppliersResponse, TierRef, WarehouseInput,
 } from './admin.models';
 
@@ -227,6 +229,44 @@ export class AdminService {
 
   carts(): Promise<{ carts: AdminCart[] }> {
     return firstValueFrom(this.http.get<{ carts: AdminCart[] }>('/api/admin/carts'));
+  }
+
+  // ---------- Purchase price lists ----------
+
+  priceLists(): Promise<{ lists: AdminPriceList[] }> {
+    return firstValueFrom(this.http.get<{ lists: AdminPriceList[] }>('/api/admin/price-lists'));
+  }
+
+  priceList(id: string): Promise<{
+    list: AdminPriceList;
+    shown: number;
+    items: AdminPriceListItem[];
+  }> {
+    return firstValueFrom(
+      this.http.get<{ list: AdminPriceList; shown: number; items: AdminPriceListItem[] }>(
+        `/api/admin/price-lists/${id}`
+      )
+    );
+  }
+
+  uploadPriceList(input: PriceListUploadInput): Promise<PriceListUploadResult> {
+    return firstValueFrom(
+      this.http.post<PriceListUploadResult>('/api/admin/price-lists', input)
+    );
+  }
+
+  /** Renames, or switches it on and off. Switching one on stands the other down. */
+  updatePriceList(
+    id: string,
+    changes: { name?: string; description?: string | null; active?: boolean }
+  ): Promise<{ list: AdminPriceList }> {
+    return firstValueFrom(
+      this.http.patch<{ list: AdminPriceList }>(`/api/admin/price-lists/${id}`, changes)
+    );
+  }
+
+  deletePriceList(id: string): Promise<{ ok: boolean }> {
+    return firstValueFrom(this.http.delete<{ ok: boolean }>(`/api/admin/price-lists/${id}`));
   }
 
   // ---------- Notifications ----------

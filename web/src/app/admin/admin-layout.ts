@@ -78,7 +78,12 @@ export class AdminLayout {
     {
       heading: 'Pricing',
       adminOnly: true,
-      items: [{ path: '/admin/markup-rules', label: 'Markup rules', exact: false }],
+      items: [
+        // Purchase price first: it is the number the markup rules multiply, so
+        // the section reads in the order the engine works in.
+        { path: '/admin/price-lists', label: 'Purchase price lists', exact: false },
+        { path: '/admin/markup-rules', label: 'Markup rules', exact: false },
+      ],
     },
     {
       heading: 'Sales',

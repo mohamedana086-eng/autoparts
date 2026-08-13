@@ -285,6 +285,55 @@ export interface AdminCart {
   items: AdminCartItem[];
 }
 
+// ---------- Purchase price lists ----------
+
+export interface AdminPriceList {
+  id: string;
+  name: string;
+  description: string | null;
+  /** At most one list is active at a time; the database enforces it. */
+  active: boolean;
+  /** The file it was read from. */
+  sourceName: string | null;
+  itemCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminPriceListItem {
+  productId: string;
+  partNumber: string;
+  name: string;
+  /** In the base currency — what the markup engine works from. */
+  price: number;
+  /** What the file quoted, when it needed converting. */
+  sourcePrice: number | null;
+  sourceCurrency: string | null;
+  /** The part's own price, which is what applies without this list. */
+  basePrice: number;
+}
+
+/** A row read out of the uploaded file, before the API has matched it. */
+export interface PriceRowInput {
+  partNumber: string;
+  price: number;
+  currency?: string | null;
+}
+
+export interface PriceListUploadInput {
+  name: string;
+  description?: string | null;
+  sourceName?: string | null;
+  rows: PriceRowInput[];
+}
+
+export interface PriceListUploadResult {
+  list: AdminPriceList;
+  accepted: number;
+  rejectedCount: number;
+  rejected: { partNumber: string; reason: string }[];
+}
+
 // ---------- Notifications ----------
 
 export const NOTIFICATION_TYPES = ['system', 'order', 'stock', 'account'] as const;

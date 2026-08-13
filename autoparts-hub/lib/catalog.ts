@@ -75,12 +75,63 @@ async function loadBaseCurrency(): Promise<PricingCurrency | null> {
   return base ? { code: base.code, symbol: base.symbol, rate: base.rate } : null;
 }
 
-interface PriceableProduct {
+/**
+ * What every query that prices a product must load.
+ *
+ * The active price list's line for the part comes down with the part itself,
+ * as a filtered join, rather than the whole list being loaded into memory
+ * once per request — a supplier list runs to tens of thousands of rows and a
+ * search touches twenty of them.
+ *
+ * Spread into the `include` of any query whose rows are handed to `priceFor`.
+ * Kept here, and only here, because "what does it take to price a product" is
+ * one fact, and six routes each answering it separately is six chances for one
+ * of them to quietly price from the wrong number.
+ */
+export const PRICED_PRODUCT_INCLUDE = {
+  manufacturer: true,
+  vehicleSystem: true,
+  // At most one list is active — the database enforces it — so this is at
+  // most one row, and `take` says so rather than leaving it implied.
+  priceListItems: {
+    where: { priceList: { active: true } },
+    select: { price: true },
+    take: 1,
+  },
+} as const;
+
+/**
+ * The least a row needs for its purchase price to be resolved.
+ *
+ * Narrower than `PriceableProduct` on purpose: working out what a part cost to
+ * buy needs the price and the active list's line, and nothing about the brand
+ * or the system it belongs to. Callers that only want the cost — the admin's
+ * basket values, for one — should not have to load a manufacturer to get it.
+ */
+export interface PurchasePriced {
   basePrice: number;
+  /** The active list's line, when one covers this part. See the include above. */
+  priceListItems?: { price: number }[];
+}
+
+interface PriceableProduct extends PurchasePriced {
   partNumber: string;
   supplierId?: string | null;
   manufacturer: { name: string };
   vehicleSystem: { slug: string };
+}
+
+/**
+ * What the part costs to buy.
+ *
+ * The active price list wins where it mentions the part; otherwise the part's
+ * own `basePrice` stands. A list that covers half the catalogue therefore
+ * reprices half of it and leaves the rest exactly as it was, which is what
+ * makes uploading one safe — reading a missing line as zero would put every
+ * part the supplier did not quote on sale for nothing.
+ */
+export function purchasePriceOf(product: PurchasePriced): number {
+  return product.priceListItems?.[0]?.price ?? product.basePrice;
 }
 
 export function priceFor(product: PriceableProduct, ctx: PricingContext): PriceResult | null {
@@ -88,7 +139,7 @@ export function priceFor(product: PriceableProduct, ctx: PricingContext): PriceR
 
   return resolvePrice(
     {
-      basePrice: product.basePrice,
+      basePrice: purchasePriceOf(product),
       // The part's own supplier. This used to be whichever supplier the table
       // happened to return first, which made every supplier markup rule either
       // dead or catalogue-wide depending on row order.

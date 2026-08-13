@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { loadPricingContext, priceFor } from '@/lib/catalog';
+import { loadPricingContext, priceFor, PRICED_PRODUCT_INCLUDE } from '@/lib/catalog';
 
 // GET /api/catalog/products/<id> — detail view, priced for the caller's tier.
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   const product = await prisma.product.findUnique({
     where: { id: params.id },
-    include: { manufacturer: true, vehicleSystem: true, interchanges: true, supplier: true },
+    include: { ...PRICED_PRODUCT_INCLUDE, interchanges: true, supplier: true },
   });
 
   if (!product) {

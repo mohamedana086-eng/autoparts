@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
-import { loadPricingContext, normalisePartNumber, priceFor, roundMoney } from '@/lib/catalog';
+import {
+  loadPricingContext, normalisePartNumber, priceFor, purchasePriceOf, roundMoney,
+  PRICED_PRODUCT_INCLUDE,
+} from '@/lib/catalog';
 
 /** Guards the request against someone pasting a whole catalogue in. */
 const MAX_ROWS = 1000;
@@ -64,7 +67,7 @@ export async function POST(req: NextRequest) {
   const products = ids.length
     ? await prisma.product.findMany({
         where: { id: { in: ids } },
-        include: { manufacturer: true, vehicleSystem: true },
+        include: PRICED_PRODUCT_INCLUDE,
       })
     : [];
   const byId = new Map(products.map((p) => [p.id, p]));
@@ -102,7 +105,7 @@ export async function POST(req: NextRequest) {
         manufacturer: product.manufacturer.name,
         system: product.vehicleSystem.name,
         stockDays: product.stockDays,
-        price: pricing?.finalPrice ?? product.basePrice,
+        price: pricing?.finalPrice ?? purchasePriceOf(product),
         appliedRule: pricing?.appliedRule ?? null,
       },
     };

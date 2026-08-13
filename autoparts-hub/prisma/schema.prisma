@@ -96,7 +96,57 @@ model Product {
   images         ProductImage[]
   stock          StockLevel[]
   cartItems      CartItem[]
+  priceListItems PriceListItem[]
   createdAt      DateTime      @default(now())
+}
+
+// ---------- Purchase price lists ----------
+
+/// A supplier purchase-price list.
+///
+/// `Product.basePrice` is one number per part with no record of where it came
+/// from, what it was before, or when it changed. A list is that number given a
+/// source and a date — and because at most one list is active, it is a set of
+/// prices that can be swapped in and back out without editing a single part.
+///
+/// At most one row may be active, enforced by a partial unique index in the
+/// migration rather than by application code: "exactly one of these is true"
+/// is a claim about the table, and a claim about the table belongs in it.
+/// None active is a legitimate state and means every part falls back to its
+/// own `basePrice`, which is where the catalogue started.
+model PriceList {
+  id          String          @id @default(cuid())
+  name        String
+  /// Free note — which supplier sent it, which quarter it covers.
+  description String?
+  active      Boolean         @default(false)
+  /// The file it was read from, kept so a figure can be traced to its source.
+  sourceName  String?
+  items       PriceListItem[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+/// What one list says one part costs to buy.
+model PriceListItem {
+  id          String    @id @default(cuid())
+  priceListId String
+  priceList   PriceList @relation(fields: [priceListId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  /// In the base currency, which is what the markup engine multiplies up.
+  price       Float
+
+  /// What the uploaded file actually said, before conversion. Kept because a
+  /// converted number nobody can check against its source is a number nobody
+  /// can defend when a supplier disputes it. Null when the file was already
+  /// in the base currency.
+  sourcePrice    Float?
+  sourceCurrency String?
+
+  @@unique([priceListId, productId])
+  @@index([productId])
 }
 
 /// A picture of a part.

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
-import { loadPricingContext, priceFor, roundMoney } from '@/lib/catalog';
+import {
+  loadPricingContext, priceFor, purchasePriceOf, roundMoney, PRICED_PRODUCT_INCLUDE,
+} from '@/lib/catalog';
 import { reserveStock, type Shortfall } from '@/lib/inventory';
 
 const MAX_LINES = 200;
@@ -108,7 +110,7 @@ export async function POST(req: NextRequest) {
 
   const products = await prisma.product.findMany({
     where: { id: { in: [...wanted.keys()] } },
-    include: { manufacturer: true, vehicleSystem: true },
+    include: PRICED_PRODUCT_INCLUDE,
   });
 
   if (products.length !== wanted.size) {
@@ -133,7 +135,7 @@ export async function POST(req: NextRequest) {
     partNumber: p.partNumber,
     name: p.name,
     quantity: wanted.get(p.id)!,
-    unitPrice: priceFor(p, ctx)?.netBase ?? p.basePrice,
+    unitPrice: priceFor(p, ctx)?.netBase ?? purchasePriceOf(p),
   }));
 
   const total = roundMoney(lines.reduce((sum, l) => sum + l.unitPrice * l.quantity, 0));

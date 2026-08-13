@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import {
   idsByFuzzyMatch, idsMatchingNormalisedPartNumber, loadPricingContext, normalisePartNumber, priceFor,
+  PRICED_PRODUCT_INCLUDE,
 } from '@/lib/catalog';
 import { RELIABILITIES, isReliability } from '@/lib/supplier-classification';
 
@@ -117,8 +118,7 @@ export async function GET(req: NextRequest) {
   // Filtered by the query only. System and brand are applied below so their
   // facet counts can be taken before each one narrows the list.
   const include = {
-    manufacturer: true,
-    vehicleSystem: true,
+    ...PRICED_PRODUCT_INCLUDE,
     interchanges: true,
     supplier: true,
   } as const;
