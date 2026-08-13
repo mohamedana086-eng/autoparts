@@ -19,6 +19,9 @@ const local = (over: Partial<CartItem> = {}): CartItem => ({
   unitPrice: 100,
   stockDays: 3,
   qty: 1,
+  // High by default so the merge tests exercise merging rather than capping;
+  // the cases that care about the ceiling set it themselves.
+  available: 999,
   ...over,
 });
 
@@ -30,6 +33,7 @@ const saved = (over: Partial<SavedBasketLine> = {}): SavedBasketLine => ({
   stockDays: 3,
   unitPrice: 80,
   quantity: 1,
+  available: 999,
   ...over,
 });
 
@@ -83,6 +87,7 @@ describe('mergeBaskets', () => {
       stockDays: 9,
       unitPrice: 80,
       qty: 1,
+      available: 999,
     });
   });
 
@@ -93,5 +98,17 @@ describe('mergeBaskets', () => {
 
   it('leaves an empty basket empty', () => {
     expect(mergeBaskets([], [])).toEqual([]);
+  });
+
+  it('holds a merged line to what the part actually has', () => {
+    // A basket saved when there were ten has no claim on a shelf down to two.
+    const merged = mergeBaskets([local({ qty: 10 })], [saved({ quantity: 10, available: 2 })]);
+
+    expect(merged[0].qty).toBe(2);
+  });
+
+  it('drops a line for a part that sold out while the basket sat', () => {
+    // A line for none of something is not a line.
+    expect(mergeBaskets([local({ qty: 3 })], [saved({ quantity: 3, available: 0 })])).toEqual([]);
   });
 });

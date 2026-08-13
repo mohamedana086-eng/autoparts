@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import {
-  loadPricingContext, priceFor, purchasePriceOf, PRICED_PRODUCT_INCLUDE, type PricingContext,
+  loadPricingContext, priceFor, purchasePriceOf, sellableQuantity,
+  PRICED_PRODUCT_INCLUDE, STOCK_INCLUDE, type PricingContext,
 } from '@/lib/catalog';
 
 /** Every basket line the API returns, from either verb. Not exported: a route
@@ -19,13 +20,14 @@ type BasketLine = {
     manufacturer: { name: string };
     vehicleSystem: { slug: string };
     priceListItems?: { price: number }[];
+    stock?: { quantity: number; reserved: number }[];
   };
 };
 
 /** What the product rows a basket line needs look like, for both queries. */
 const WITH_PRICING = {
   items: {
-    include: { product: { include: PRICED_PRODUCT_INCLUDE } },
+    include: { product: { include: { ...PRICED_PRODUCT_INCLUDE, ...STOCK_INCLUDE } } },
     orderBy: { addedAt: 'asc' as const },
   },
 } as const;
@@ -47,6 +49,11 @@ function serialiseBasket(
       // which is the same fallback the order endpoint uses.
       unitPrice: priceFor(i.product, ctx)?.finalPrice ?? purchasePriceOf(i.product),
       quantity: i.quantity,
+      // What the basket may hold of this part. Sent so the cart can hold its
+      // own quantity control to it instead of finding out at checkout, and
+      // resolved fresh on every read — a basket saved last week has no claim
+      // on stock that has since been sold.
+      available: sellableQuantity(i.product),
     })),
   };
 }

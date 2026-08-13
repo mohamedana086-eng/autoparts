@@ -180,6 +180,8 @@ export interface SavedBasketLine {
   stockDays: number;
   unitPrice: number;
   quantity: number;
+  /** Units this basket may hold of the part, resolved on every read. */
+  available: number;
 }
 
 export interface SavedBasket {

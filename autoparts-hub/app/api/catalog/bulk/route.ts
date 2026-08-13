@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import {
   loadPricingContext, normalisePartNumber, priceFor, purchasePriceOf, roundMoney,
-  PRICED_PRODUCT_INCLUDE,
+  sellableQuantity, PRICED_PRODUCT_INCLUDE, STOCK_INCLUDE,
 } from '@/lib/catalog';
 
 /** Guards the request against someone pasting a whole catalogue in. */
@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
   const products = ids.length
     ? await prisma.product.findMany({
         where: { id: { in: ids } },
-        include: PRICED_PRODUCT_INCLUDE,
+        include: { ...PRICED_PRODUCT_INCLUDE, ...STOCK_INCLUDE },
       })
     : [];
   const byId = new Map(products.map((p) => [p.id, p]));
@@ -107,6 +107,9 @@ export async function POST(req: NextRequest) {
         stockDays: product.stockDays,
         price: pricing?.finalPrice ?? purchasePriceOf(product),
         appliedRule: pricing?.appliedRule ?? null,
+        // A spreadsheet of fifty numbers is exactly where adding more than
+        // exists would go unnoticed, so the figure travels with the row.
+        available: sellableQuantity(product),
       },
     };
   });

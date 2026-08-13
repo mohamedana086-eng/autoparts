@@ -41,18 +41,23 @@ Actions were relying on a layout redirect that does not gate them.
   transaction under row locks, so two customers cannot be sold the same last
   unit.
 
-  **A part with no stock row is untracked, not out of stock.** Nobody has
-  counted it into a warehouse, so there is no number to hold it to and it
-  sells on `Product.stockDays` the way the whole catalogue did before
-  warehouses existed. Only a counted part is held to a figure. Reading an
-  absent row as zero would take every uncounted part off sale.
+  **Stock is the authority: a part with nothing counted has nothing to
+  sell.** An order for it is refused the same way an order for a counted part
+  that has run out is refused, and the storefront shows both as "Out of
+  stock". `availabilityOf()` still tells the two apart — `null` for an
+  unfilled record, `0` for an empty shelf — because an admin needs to know
+  which is which; `sellableQuantity()` is the one place they collapse, and
+  changing the policy back means changing that function.
 
-  The storefront says the same three things, through `availabilityOf()`:
-  a counted part with stock shows the number, a counted part with none shows
-  "Out of stock", and an uncounted part shows its lead time and makes no
-  claim about stock at all. Availability counts only warehouses that can be
-  picked from — the same restriction `reserveStock` applies — so a page and
-  a checkout cannot disagree about whether a part can be had.
+  Availability counts only warehouses that can be picked from, the same
+  restriction `reserveStock` applies, so a page and a checkout cannot
+  disagree about whether a part can be had. The quantity controls on the
+  product, cart and bulk pages stop at what is available and say so; that is
+  a courtesy, and `reserveStock` under a row lock is what actually holds the
+  line.
+
+  **This means a part nobody has counted cannot be sold at all.** Filling in
+  stock is therefore a prerequisite for selling, not an optional refinement.
 
 - **Purchase price lists** — `lib/price-lists.ts`, `/api/admin/price-lists`.
   What a part costs to buy, as a list with a source and a date rather than a

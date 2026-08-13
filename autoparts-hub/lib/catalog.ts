@@ -171,6 +171,23 @@ export function availabilityOf(product: StockCounted): number | null {
   return product.stock.reduce((sum, s) => sum + (s.quantity - s.reserved), 0);
 }
 
+/**
+ * How many may actually be sold.
+ *
+ * Stock is the authority: a part nobody has counted has none to sell, and
+ * `null` and `0` come to the same answer here even though they remain
+ * different facts. `availabilityOf` keeps them apart because the two have
+ * different causes — one is an unfilled record, the other an empty shelf —
+ * and an admin looking at the catalogue needs to tell them apart. Nothing a
+ * customer can do depends on which it is.
+ *
+ * This is the only place that decision is made, so changing the policy back
+ * to selling uncounted parts on their lead time is changing this function.
+ */
+export function sellableQuantity(product: StockCounted): number {
+  return availabilityOf(product) ?? 0;
+}
+
 export function priceFor(product: PriceableProduct, ctx: PricingContext): PriceResult | null {
   if (!ctx.category) return null;
 

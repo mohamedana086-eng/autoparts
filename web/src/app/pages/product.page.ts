@@ -102,36 +102,36 @@ import type { ProductResponse } from '../core/api.models';
             </p>
           }
 
-          <!-- One box when nothing has been counted, two when it has: an
-               empty "stock" panel saying nothing is worse than not being
-               there, and the delivery time already answers the question a
-               customer is asking. -->
-          <div class="grid gap-3 mt-6 text-center"
-               [class]="counted() ? 'grid-cols-2' : 'grid-cols-1'">
+          <!-- Stock always has something to say now, so the box is always
+               there: a part with none counted reads the same as one that has
+               run out, which is also how it behaves. -->
+          <div class="grid grid-cols-2 gap-3 mt-6 text-center">
             <div class="border border-ink-line rounded-plate py-3">
               <p class="text-[10px] text-mute uppercase">Delivery</p>
               <p class="text-xs font-mono">{{ product().stockDays }} day{{ product().stockDays === 1 ? '' : 's' }}</p>
             </div>
-            @if (counted()) {
-              <div class="border border-ink-line rounded-plate py-3">
-                <p class="text-[10px] text-mute uppercase">Stock</p>
-                @if (product().available! > 0) {
-                  <p class="text-xs font-mono text-stock">{{ product().available }} available</p>
-                } @else {
-                  <!-- Not "on order": a counted part with none left is refused
-                       outright at checkout — see reserveStock — so promising a
-                       backorder here would be a promise the system does not
-                       keep. -->
-                  <p class="text-xs font-mono text-alert">Out of stock</p>
-                }
-              </div>
-            }
+            <div class="border border-ink-line rounded-plate py-3">
+              <p class="text-[10px] text-mute uppercase">Stock</p>
+              @if (sellable() > 0) {
+                <p class="text-xs font-mono text-stock">{{ sellable() }} available</p>
+              } @else {
+                <p class="text-xs font-mono text-alert">Out of stock</p>
+              }
+            </div>
           </div>
 
-          <button type="button" (click)="addToCart()"
-                  class="w-full mt-6 btn-primary py-3">
-            {{ added() ? 'Added to cart' : 'Add to cart' }}
+          <button type="button" (click)="addToCart()" [disabled]="sellable() === 0"
+                  class="w-full mt-6 btn-primary py-3 disabled:opacity-40 disabled:cursor-not-allowed">
+            @if (sellable() === 0) {
+              Out of stock
+            } @else {
+              {{ added() ? 'Added to cart' : 'Add to cart' }}
+            }
           </button>
+
+          @if (cartMessage(); as message) {
+            <p class="text-[11px] text-alert mt-2">{{ message }}</p>
+          }
 
           @if (product().supplier; as supplier) {
             <p class="text-[11px] text-mute mt-4 flex flex-wrap items-baseline gap-1.5">
@@ -176,12 +176,17 @@ export class ProductPage {
     return (this.data()?.product.images ?? []).filter((i) => !failed.has(i.url));
   });
 
-  /** Whether anyone has counted this part into a warehouse at all. Null means
-   *  not, which is a different thing from none left — see the API model. */
-  protected readonly counted = computed(() => {
-    const available = this.data()?.product.available;
-    return available !== null && available !== undefined;
-  });
+  /**
+   * How many may be sold.
+   *
+   * An uncounted part comes to zero, the same as a counted one that has run
+   * out — stock is the authority, and `sellableQuantity` on the API side makes
+   * the same call. The two remain different facts in the data; neither of them
+   * lets a customer buy anything.
+   */
+  protected readonly sellable = computed(() => this.data()?.product.available ?? 0);
+
+  protected readonly cartMessage = signal<string | null>(null);
 
   protected readonly selectedIndex = signal(0);
 
@@ -229,14 +234,28 @@ export class ProductPage {
 
   protected addToCart(): void {
     const p = this.product();
-    this.cart.add({
+    const outcome = this.cart.add({
       id: p.id,
       partNumber: p.partNumber,
       name: p.name,
       manufacturer: p.manufacturer,
       unitPrice: p.price,
       stockDays: p.stockDays,
+      available: this.sellable(),
     });
+
+    if (outcome.capped) {
+      // Says what is available rather than only that the request was refused,
+      // because the number is the thing that decides what they do next.
+      this.cartMessage.set(
+        outcome.available === 0
+          ? 'This part is out of stock.'
+          : `Only ${outcome.available} available, and your basket already holds ${outcome.qty}.`
+      );
+      return;
+    }
+
+    this.cartMessage.set(null);
     this.added.set(true);
     clearTimeout(this.resetTimer);
     this.resetTimer = setTimeout(() => this.added.set(false), 1600);

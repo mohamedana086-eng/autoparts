@@ -9,13 +9,21 @@ import type { Prisma } from '@prisma/client';
  * `reserved` and leaves `quantity` alone — the goods have not gone anywhere
  * yet. Shipping lowers both, because that is the moment they leave.
  *
- * The rule that decides everything else here: a part with no stock row is
- * UNTRACKED, not out of stock. Nobody has counted it into a warehouse, so
- * there is no number to hold it to, and it sells on `Product.stockDays` the
- * way the whole catalogue did before warehouses existed. Reading an absent row
- * as zero would take every part nobody has counted yet off sale — which today
- * is all of them. Out of stock is a thing you can only be once someone has
- * looked at the shelf.
+ * The rule that decides everything else here: stock is the authority. A part
+ * with no counted stock has none to sell, and an order for it is refused the
+ * same way an order for a counted part that has run out is refused.
+ *
+ * This reverses what the module did originally, where an uncounted part sold
+ * on `Product.stockDays` alone the way the whole catalogue did before
+ * warehouses existed. That was the right default while the counts were being
+ * filled in and the wrong one for a shop that means to sell what it holds:
+ * under it, a part nobody had got around to counting was indistinguishable
+ * from one with plenty, and the difference only surfaced when the customer's
+ * order could not be filled.
+ *
+ * `availabilityOf` still tells a missing count from an empty shelf, because an
+ * admin needs to know which is which. Selling does not: see
+ * `sellableQuantity`, which is the single place that decision is made.
  */
 
 /** What one order line needs. */
@@ -80,10 +88,9 @@ export async function reserveStock(
       FOR UPDATE OF s
     `;
 
-    // Untracked — see the rule at the top of this file. Nothing to reserve and
-    // nothing to refuse.
-    if (rows.length === 0) continue;
-
+    // No rows means nothing counted, which sums to nothing available — the
+    // shortfall below refuses it without needing a case of its own. It used to
+    // `continue` here and let the line through; see the note at the top.
     const available = rows.reduce((sum, r) => sum + Number(r.available), 0);
     if (available < need.quantity) {
       return {

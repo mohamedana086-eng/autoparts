@@ -18,6 +18,8 @@ interface BulkRow {
     stockDays: number;
     price: number;
     appliedRule: string | null;
+    /** Units that may be bought. Zero for a part with none counted. */
+    available: number;
   } | null;
 }
 
@@ -264,20 +266,39 @@ export class BulkPage {
     }
   }
 
-  protected addOne(row: BulkRow): void {
-    if (!row.product) return;
-    this.cart.add({
+  /** Returns whether the whole request went in, so "add all" can report on
+   *  the rows stock would not cover. */
+  protected addOne(row: BulkRow): boolean {
+    if (!row.product) return true;
+
+    const outcome = this.cart.add({
       id: row.product.id,
       partNumber: row.product.partNumber,
       name: row.product.name,
       manufacturer: row.product.manufacturer,
       unitPrice: row.product.price,
       stockDays: row.product.stockDays,
+      available: row.product.available,
     });
+
+    return !outcome.capped;
   }
 
   protected addAll(): void {
-    for (const row of this.result()?.rows ?? []) this.addOne(row);
+    // Adding fifty parts at once is where a silent cap would do the most
+    // damage, so the ones stock could not cover are counted and named.
+    const short = (this.result()?.rows ?? []).filter((row) => !this.addOne(row));
+
     this.added.set(true);
+    this.error.set(
+      short.length === 0
+        ? null
+        : `${short.length} of these could not be added in full — ` +
+          short
+            .slice(0, 3)
+            .map((r) => `${r.product!.partNumber} (${r.product!.available} available)`)
+            .join(', ') +
+          (short.length > 3 ? `, and ${short.length - 3} more.` : '.')
+    );
   }
 }

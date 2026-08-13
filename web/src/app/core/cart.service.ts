@@ -13,10 +13,30 @@ export interface CartItem {
   unitPrice: number;
   stockDays: number;
   qty: number;
+  /**
+   * Units that may be held of this part, as the API last reported them.
+   *
+   * A ceiling for the quantity controls, not a guarantee: it was true when the
+   * page loaded and someone else can buy the last one in between. Checkout
+   * re-checks under a row lock and refuses if it has moved, which is what
+   * actually protects the stock — this only keeps the customer from typing a
+   * number that was never going to work.
+   */
+  available: number;
 }
 
 const STORAGE_KEY = 'aph_cart';
 const MAX_QTY = 999;
+
+/** What a quantity change actually did, so the page can say so. */
+export interface QuantityOutcome {
+  /** What the line holds now. Zero means it is not in the basket. */
+  qty: number;
+  /** True when less was granted than asked for, because stock ran out. */
+  capped: boolean;
+  /** What the part had when the change was applied. */
+  available: number;
+}
 
 /** Long enough that typing a quantity is one request, short enough that a tab
  *  closed straight after a change has already sent it. */
@@ -45,6 +65,7 @@ function fromServer(line: SavedBasketLine): CartItem {
     unitPrice: line.unitPrice,
     stockDays: line.stockDays,
     qty: Math.min(line.quantity, MAX_QTY),
+    available: line.available,
   };
 }
 
@@ -70,13 +91,19 @@ export function mergeBaskets(local: CartItem[], server: SavedBasketLine[]): Cart
 
   for (const line of server) {
     const mine = byId.get(line.productId);
+    const wanted = mine ? Math.max(mine.qty, line.quantity) : line.quantity;
+
     byId.set(line.productId, {
       ...fromServer(line),
-      qty: mine ? Math.min(Math.max(mine.qty, line.quantity), MAX_QTY) : Math.min(line.quantity, MAX_QTY),
+      // Held to what the part has as well as to the ceiling: a basket saved
+      // when there were ten of something has no claim on it now there are two.
+      qty: Math.min(wanted, line.available, MAX_QTY),
     });
   }
 
-  return [...byId.values()];
+  // A merged line can come out at zero — the part sold out while the basket
+  // sat — and a line for none of something is not a line.
+  return [...byId.values()].filter((i) => i.qty > 0);
 }
 
 /**
@@ -198,22 +225,48 @@ export class CartService {
     this._items.set([]);
   }
 
-  add(item: Omit<CartItem, 'qty'>, qty = 1): void {
+  /**
+   * Adds to the basket, up to what the part actually has.
+   *
+   * Returns what happened rather than silently doing less than was asked: a
+   * quantity that quietly becomes a smaller one is the kind of thing a
+   * customer notices at the till, and the caller needs to be able to say
+   * "only four available" at the moment they clicked.
+   */
+  add(item: Omit<CartItem, 'qty'>, qty = 1): QuantityOutcome {
+    const ceiling = Math.min(item.available, MAX_QTY);
+    const held = this._items().find((i) => i.id === item.id)?.qty ?? 0;
+    const wanted = held + qty;
+    const granted = Math.min(wanted, ceiling);
+
+    if (granted <= 0) {
+      return { qty: held, capped: true, available: item.available };
+    }
+
     this._items.update((prev) => {
       const existing = prev.find((i) => i.id === item.id);
-      if (!existing) return [...prev, { ...item, qty: Math.min(qty, MAX_QTY) }];
+      if (!existing) return [...prev, { ...item, qty: granted }];
       return prev.map((i) =>
-        i.id === item.id ? { ...i, qty: Math.min(i.qty + qty, MAX_QTY) } : i
+        i.id === item.id ? { ...i, ...item, qty: granted } : i
       );
     });
+
+    return { qty: granted, capped: granted < wanted, available: item.available };
   }
 
-  setQty(id: string, qty: number): void {
-    this._items.update((prev) =>
-      qty <= 0
-        ? prev.filter((i) => i.id !== id)
-        : prev.map((i) => (i.id === id ? { ...i, qty: Math.min(qty, MAX_QTY) } : i))
-    );
+  setQty(id: string, qty: number): QuantityOutcome {
+    const line = this._items().find((i) => i.id === id);
+    if (!line) return { qty: 0, capped: false, available: 0 };
+
+    if (qty <= 0) {
+      this._items.update((prev) => prev.filter((i) => i.id !== id));
+      return { qty: 0, capped: false, available: line.available };
+    }
+
+    const granted = Math.min(qty, line.available, MAX_QTY);
+    this._items.update((prev) => prev.map((i) => (i.id === id ? { ...i, qty: granted } : i)));
+
+    return { qty: granted, capped: granted < qty, available: line.available };
   }
 
   remove(id: string): void {

@@ -229,8 +229,11 @@ export async function POST(req: NextRequest) {
           {
             error:
               available === 0
-                ? `${label} has just gone out of stock. Remove it and try again.`
-                : `Only ${available} of ${label} ${available === 1 ? 'is' : 'are'} left, and you asked for ${wanted}.`,
+                ? // Covers both an empty shelf and a part nobody has counted:
+                  // to a customer they are the same answer, and naming the
+                  // bookkeeping difference would explain nothing they can act on.
+                  `${label} is out of stock. Remove it and try again.`
+                : `Only ${available} of ${label} ${available === 1 ? 'is' : 'are'} available, and you asked for ${wanted}.`,
             productId,
             available,
           },

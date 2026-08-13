@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { availabilityOf } from '@/lib/catalog';
+import { availabilityOf, sellableQuantity } from '@/lib/catalog';
 
 /**
  * Whether a part can be sold from stock.
@@ -50,5 +50,36 @@ describe('availabilityOf', () => {
     expect(
       availabilityOf({ stock: [{ quantity: 1, reserved: 1 }, { quantity: 6, reserved: 2 }] })
     ).toBe(4);
+  });
+});
+
+/**
+ * What may actually be sold.
+ *
+ * Stock is the authority: an uncounted part has nothing to sell. The two
+ * facts stay distinct in `availabilityOf` because an admin needs to tell an
+ * unfilled record from an empty shelf — but nothing a customer can do turns
+ * on which it is, and that collapse happens here and nowhere else.
+ */
+describe('sellableQuantity', () => {
+  it('sells nothing from a part nobody has counted', () => {
+    expect(sellableQuantity({})).toBe(0);
+    expect(sellableQuantity({ stock: [] })).toBe(0);
+  });
+
+  it('sells nothing from a counted part that has run out', () => {
+    expect(sellableQuantity({ stock: [{ quantity: 4, reserved: 4 }] })).toBe(0);
+  });
+
+  it('gives the two the same answer, though they are different facts', () => {
+    // The policy in one line: an unfilled record and an empty shelf are the
+    // same to a buyer.
+    expect(sellableQuantity({ stock: [] })).toBe(sellableQuantity({ stock: [{ quantity: 0, reserved: 0 }] }));
+    expect(availabilityOf({ stock: [] })).not.toBe(availabilityOf({ stock: [{ quantity: 0, reserved: 0 }] }));
+  });
+
+  it('sells what is on the shelf and not what is promised', () => {
+    expect(sellableQuantity({ stock: [{ quantity: 10, reserved: 0 }] })).toBe(10);
+    expect(sellableQuantity({ stock: [{ quantity: 10, reserved: 4 }] })).toBe(6);
   });
 });

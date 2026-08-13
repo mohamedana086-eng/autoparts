@@ -56,16 +56,25 @@ import { OrdersService, type PlacedOrder } from '../core/orders.service';
                   {{ item.stockDays }} day{{ item.stockDays === 1 ? '' : 's' }} delivery
                 </p>
                 <p class="text-xs text-mute mt-1 font-mono">€{{ item.unitPrice.toFixed(2) }} each</p>
+                @if (item.qty >= item.available) {
+                  <p class="text-[11px] text-alert mt-1">
+                    Only {{ item.available }} available at the moment
+                  </p>
+                }
               </div>
 
               <div class="flex items-center gap-4 justify-between sm:justify-end">
                 <div class="flex items-center border border-ink-line rounded-plate">
-                  <button type="button" (click)="cart.setQty(item.id, item.qty - 1)"
+                  <button type="button" (click)="changeQty(item.id, item.qty - 1)"
                           class="px-3 py-1.5 text-mute hover:text-paper transition-colors"
                           [attr.aria-label]="'Decrease quantity of ' + item.name">−</button>
                   <span class="font-mono text-sm w-8 text-center" aria-live="polite">{{ item.qty }}</span>
-                  <button type="button" (click)="cart.setQty(item.id, item.qty + 1)"
-                          class="px-3 py-1.5 text-mute hover:text-paper transition-colors"
+                  <!-- Stopped at what the part has rather than allowed and
+                       then refused: the customer finds out here, not at the
+                       till. Checkout still re-checks under a lock. -->
+                  <button type="button" (click)="changeQty(item.id, item.qty + 1)"
+                          [disabled]="item.qty >= item.available"
+                          class="px-3 py-1.5 text-mute hover:text-paper transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                           [attr.aria-label]="'Increase quantity of ' + item.name">+</button>
                 </div>
 
@@ -127,6 +136,17 @@ export class CartPage {
   protected readonly placing = signal(false);
   protected readonly placed = signal<PlacedOrder | null>(null);
   protected readonly error = signal<string | null>(null);
+
+  /** Wraps the service so a request the stock could not meet is said out loud
+   *  rather than quietly becoming a smaller number. */
+  protected changeQty(id: string, qty: number): void {
+    const outcome = this.cart.setQty(id, qty);
+    if (outcome.capped) {
+      this.error.set(`Only ${outcome.available} of that part are available at the moment.`);
+    } else {
+      this.error.set(null);
+    }
+  }
 
   protected async placeOrder(): Promise<void> {
     if (this.placing()) return;
