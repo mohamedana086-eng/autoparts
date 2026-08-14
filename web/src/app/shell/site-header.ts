@@ -27,7 +27,11 @@ import type { ProductSummary } from '../core/api.models';
           </a>
 
           <nav class="flex items-center gap-4 sm:gap-5 text-sm text-mute shrink-0 md:order-3">
-            @if (auth.isAdmin()) {
+            <!-- isStaff, not isAdmin: the route guard admits SALES, so gating
+                 the only link to the panel on isAdmin left salespeople allowed
+                 in with no way to get there but typing the url. What they see
+                 inside is narrowed by the nav and enforced by the API. -->
+            @if (auth.isStaff()) {
               <a routerLink="/admin" class="hover:text-paper transition-colors hidden sm:inline">Admin</a>
             }
 

@@ -1,8 +1,14 @@
 export interface AdminStats {
+  /**
+   * Whether the figures cover everything or only this salesperson's accounts.
+   * The counts mean different things under each, so the labels follow it.
+   */
+  scope: 'all' | 'own';
   products: number;
   clients: number;
-  activeRules: number;
   orders: number;
+  /** Null for SALES: markup rules are admin-only, so there is no share of them. */
+  activeRules: number | null;
 }
 
 export interface AdminClient {

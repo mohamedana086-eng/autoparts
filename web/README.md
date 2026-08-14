@@ -42,6 +42,10 @@ Price 9 tier, via the markup rule that matches.
 npm test
 ```
 
+Stop `ng serve` first. The two share a build output and running them together
+fails the test run with an unhandled error and `no tests`, which looks like a
+broken suite and is not one.
+
 Vitest, via `ng test`. `mergeBaskets` in `core/cart.service.ts` is what is
 covered: it is the one piece of the sync that is a plain function of its
 inputs, and the rule it encodes — union both baskets, take the larger

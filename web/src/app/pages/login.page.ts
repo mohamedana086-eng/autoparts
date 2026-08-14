@@ -57,7 +57,9 @@ export class LoginPage {
     this.error.set(null);
     try {
       await this.auth.login(this.email().trim(), this.password());
-      this.router.navigate([this.auth.isAdmin() ? '/' : '/']);
+      // Both branches of this were '/' — staff signed in and landed on the
+      // storefront, which is not what they came for. Customers still do.
+      this.router.navigate([this.auth.isStaff() ? '/admin' : '/']);
     } catch (err: any) {
       this.error.set(err?.error?.error ?? 'Could not sign in. Please try again.');
     } finally {

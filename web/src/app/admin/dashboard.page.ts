@@ -48,13 +48,28 @@ export class AdminDashboardPage {
       .catch(() => this.error.set('Could not load dashboard figures.'));
   }
 
+  /**
+   * The figures, labelled for whoever is reading them.
+   *
+   * A salesperson's counts cover their own accounts, so calling them "Clients"
+   * and "Orders" would read as the whole business and be wrong by a wide
+   * margin. The markup-rule tile is dropped entirely rather than zeroed —
+   * pricing is admin-only, and a zero would say something false.
+   */
   protected tiles() {
     const s = this.stats();
-    return [
-      { label: 'Products', value: s?.products ?? 0 },
-      { label: 'Clients', value: s?.clients ?? 0 },
-      { label: 'Active markup rules', value: s?.activeRules ?? 0 },
-      { label: 'Orders', value: s?.orders ?? 0 },
+    const own = s?.scope === 'own';
+
+    const tiles = [
+      { label: 'Products in the catalogue', value: s?.products ?? 0 },
+      { label: own ? 'Your customers' : 'Clients', value: s?.clients ?? 0 },
+      { label: own ? 'Orders from your customers' : 'Orders', value: s?.orders ?? 0 },
     ];
+
+    if (s?.activeRules != null) {
+      tiles.splice(2, 0, { label: 'Active markup rules', value: s.activeRules });
+    }
+
+    return tiles;
   }
 }
