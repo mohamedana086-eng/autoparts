@@ -93,8 +93,20 @@ cp .env.example .env   # then set DATABASE_URL and AUTH_SECRET
 npx prisma generate    # npm blocks install scripts, so run this explicitly
 npm run db:migrate     # applies prisma/migrations to the database
 npm run db:seed        # sample catalog, client categories, rules, accounts
+npm run db:stock       # counts the catalogue in — see below
 npm run dev
 ```
+
+`db:stock` is not optional if you want to sell anything. Stock is what decides
+whether a part can be bought, so a freshly seeded catalogue that nobody has
+counted is a catalogue where every part reads "Out of stock" and nothing can be
+added to a basket. It writes deliberately varied figures — most parts
+comfortable, a dozen down to their last one or two, a couple with none — so the
+ceiling and the refusal are both reachable without emptying a shelf by hand.
+
+It is idempotent and safe on the deployed database: a part that already has any
+stock row is left alone, so a count entered in the admin survives a re-run.
+`npm run db:stock -- --reset` is the only way it overwrites.
 
 That serves the API on http://localhost:3000. There is nothing to look at
 there — `/` is a 404 by design. Start the Angular app as well and use it
