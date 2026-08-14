@@ -107,6 +107,21 @@ describe('mergeBaskets', () => {
     expect(merged[0].qty).toBe(2);
   });
 
+  it('does not produce NaN from a server line with no availability on it', () => {
+    // The deploy window: this code live, the API answering it not yet. Reading
+    // the missing figure straight gives Math.min(q, undefined) === NaN, which
+    // would put a quantity of NaN in a real customer's basket.
+    const line = { ...saved({ quantity: 2 }) } as Partial<SavedBasketLine>;
+    delete line.available;
+
+    const merged = mergeBaskets([], [line as SavedBasketLine]);
+
+    expect(merged).toHaveLength(1);
+    expect(Number.isFinite(merged[0].qty)).toBe(true);
+    expect(merged[0].qty).toBe(2);
+    expect(Number.isFinite(merged[0].available)).toBe(true);
+  });
+
   it('drops a line for a part that sold out while the basket sat', () => {
     // A line for none of something is not a line.
     expect(mergeBaskets([local({ qty: 3 })], [saved({ quantity: 3, available: 0 })])).toEqual([]);

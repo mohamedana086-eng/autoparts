@@ -42,18 +42,36 @@ export interface QuantityOutcome {
  *  closed straight after a change has already sent it. */
 const PUSH_DEBOUNCE_MS = 600;
 
+/**
+ * A ceiling for a line whose availability nothing has told us.
+ *
+ * Two ways that happens, and both are real: a basket saved by a build from
+ * before stock was gated, and a moment during a deploy where this code is live
+ * and the API answering it is not. Either way the honest local answer is "no
+ * idea", and the safe one is not to cap — `Math.min(qty, undefined)` is NaN,
+ * which would put a quantity of NaN in the customer's basket rather than
+ * simply failing to restrict it. Checkout re-checks under a row lock and is
+ * what actually holds the line.
+ */
+const UNKNOWN_AVAILABILITY = MAX_QTY;
+
 function parseStored(raw: string): CartItem[] {
   const parsed = JSON.parse(raw);
   if (!Array.isArray(parsed)) return [];
   // Drop anything hand-edited or written by an older build rather than
   // rendering it as a NaN price further down.
-  return parsed.filter(
-    (i: unknown): i is CartItem =>
-      !!i &&
-      typeof (i as CartItem).id === 'string' &&
-      typeof (i as CartItem).qty === 'number' &&
-      Number.isFinite((i as CartItem).unitPrice)
-  );
+  return parsed
+    .filter(
+      (i: unknown): i is CartItem =>
+        !!i &&
+        typeof (i as CartItem).id === 'string' &&
+        typeof (i as CartItem).qty === 'number' &&
+        Number.isFinite((i as CartItem).unitPrice)
+    )
+    .map((i) => ({
+      ...i,
+      available: Number.isFinite(i.available) ? i.available : UNKNOWN_AVAILABILITY,
+    }));
 }
 
 function fromServer(line: SavedBasketLine): CartItem {
@@ -65,7 +83,8 @@ function fromServer(line: SavedBasketLine): CartItem {
     unitPrice: line.unitPrice,
     stockDays: line.stockDays,
     qty: Math.min(line.quantity, MAX_QTY),
-    available: line.available,
+    // An API too old to send it leaves the line uncapped rather than NaN.
+    available: Number.isFinite(line.available) ? line.available : UNKNOWN_AVAILABILITY,
   };
 }
 
@@ -92,12 +111,15 @@ export function mergeBaskets(local: CartItem[], server: SavedBasketLine[]): Cart
   for (const line of server) {
     const mine = byId.get(line.productId);
     const wanted = mine ? Math.max(mine.qty, line.quantity) : line.quantity;
+    // Through fromServer, so a line the API did not put a figure on is capped
+    // by the same stand-in as everywhere else rather than by `undefined`.
+    const merged = fromServer(line);
 
     byId.set(line.productId, {
-      ...fromServer(line),
+      ...merged,
       // Held to what the part has as well as to the ceiling: a basket saved
       // when there were ten of something has no claim on it now there are two.
-      qty: Math.min(wanted, line.available, MAX_QTY),
+      qty: Math.min(wanted, merged.available, MAX_QTY),
     });
   }
 
