@@ -188,25 +188,73 @@ export function sellableQuantity(product: StockCounted): number {
   return availabilityOf(product) ?? 0;
 }
 
-export function priceFor(product: PriceableProduct, ctx: PricingContext): PriceResult | null {
+/**
+ * A part as SQL returns it: flat, because that is what a row is.
+ *
+ * The Prisma shape nested a manufacturer and a vehicle system inside the
+ * product so that a relation could be walked. A join hands back columns, and
+ * rebuilding little objects around them only to read one field out again would
+ * be dressing the row up as something it is not.
+ *
+ * `listPrice` is the active price list's figure for this part, null where no
+ * list covers it — the same fallback `purchasePriceOf` applies.
+ */
+export interface PriceableRow {
+  basePrice: number;
+  partNumber: string;
+  supplierId: string | null;
+  manufacturerName: string;
+  systemSlug: string;
+  listPrice: number | null;
+}
+
+/** What the part cost to buy, from a flat row. */
+export function rowPurchasePrice(row: Pick<PriceableRow, 'basePrice' | 'listPrice'>): number {
+  return row.listPrice ?? row.basePrice;
+}
+
+/** Prices a flat row. The nested `priceFor` below hands off to this. */
+export function priceForRow(row: PriceableRow, ctx: PricingContext): PriceResult | null {
   if (!ctx.category) return null;
 
   return resolvePrice(
     {
-      basePrice: purchasePriceOf(product),
+      basePrice: rowPurchasePrice(row),
       // The part's own supplier. This used to be whichever supplier the table
       // happened to return first, which made every supplier markup rule either
       // dead or catalogue-wide depending on row order.
-      supplierId: product.supplierId ?? '',
-      manufacturerName: product.manufacturer.name,
-      vehicleSystemSlug: product.vehicleSystem.slug,
-      partNumber: product.partNumber,
+      supplierId: row.supplierId ?? '',
+      manufacturerName: row.manufacturerName,
+      vehicleSystemSlug: row.systemSlug,
+      partNumber: row.partNumber,
       clientCategoryId: ctx.category.id,
       clientCategoryMarkupPercent: ctx.category.markupPercent,
       discountPercent: ctx.discountPercent,
       currency: ctx.currency ?? undefined,
     },
     ctx.rules
+  );
+}
+
+/**
+ * Prices a part in the shape Prisma returns it.
+ *
+ * A bridge while the routes are moved onto SQL one at a time: it flattens and
+ * calls `priceForRow`, so both halves of a half-migrated API price identically
+ * rather than by two copies of the same rules. It goes when the last Prisma
+ * route does.
+ */
+export function priceFor(product: PriceableProduct, ctx: PricingContext): PriceResult | null {
+  return priceForRow(
+    {
+      basePrice: product.basePrice,
+      partNumber: product.partNumber,
+      supplierId: product.supplierId ?? null,
+      manufacturerName: product.manufacturer.name,
+      systemSlug: product.vehicleSystem.slug,
+      listPrice: product.priceListItems?.[0]?.price ?? null,
+    },
+    ctx
   );
 }
 

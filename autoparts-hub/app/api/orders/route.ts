@@ -1,26 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { loadPricingContext, priceForRow, rowPurchasePrice, roundMoney } from '@/lib/catalog';
 import {
-  loadPricingContext, priceFor, purchasePriceOf, roundMoney, PRICED_PRODUCT_INCLUDE,
-} from '@/lib/catalog';
-import { reserveStock, type Shortfall } from '@/lib/inventory';
+  OutOfStock, ordersForClient, placeOrder, priceableProducts, tierById,
+} from '@/lib/orders';
 
 const MAX_LINES = 200;
 const MAX_QTY = 999;
-
-/**
- * Thrown to abandon the order transaction when a part cannot be held.
- *
- * An exception rather than a returned value because the reservation happens
- * inside `$transaction`, and rolling the order back is exactly what throwing
- * does. Caught immediately below and turned into a 409.
- */
-class OutOfStock extends Error {
-  constructor(readonly shortfall: Shortfall) {
-    super('Not enough stock.');
-  }
-}
 
 /** APH-260729-K3F9 — short enough to read out over the phone. */
 function makeReference(): string {
@@ -38,11 +24,7 @@ export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
 
-  const orders = await prisma.order.findMany({
-    where: { clientId: session.userId },
-    include: { items: { include: { product: true } } },
-    orderBy: { createdAt: 'desc' },
-  });
+  const orders = await ordersForClient(session.userId);
 
   // Line prices are stored in the base currency; the order carries the rate
   // that applied when it was placed. Converting on the way out shows the
@@ -54,16 +36,16 @@ export async function GET() {
       reference: o.reference,
       status: o.status,
       createdAt: o.createdAt.toISOString(),
-      units: o.items.reduce((n, i) => n + i.quantity, 0),
+      units: o.lines.reduce((n, l) => n + l.quantity, 0),
       total: roundMoney(
-        o.items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0) * o.currencyRate
+        o.lines.reduce((sum, l) => sum + l.unitPrice * l.quantity, 0) * o.currencyRate
       ),
       currencyCode: o.currencyCode,
-      lines: o.items.map((i) => ({
-        partNumber: i.product.partNumber,
-        name: i.product.name,
-        quantity: i.quantity,
-        unitPrice: roundMoney(i.unitPrice * o.currencyRate),
+      lines: o.lines.map((l) => ({
+        partNumber: l.partNumber,
+        name: l.name,
+        quantity: l.quantity,
+        unitPrice: roundMoney(l.unitPrice * o.currencyRate),
       })),
     })),
   });
@@ -108,10 +90,7 @@ export async function POST(req: NextRequest) {
     wanted.set(productId, (wanted.get(productId) ?? 0) + quantity);
   }
 
-  const products = await prisma.product.findMany({
-    where: { id: { in: [...wanted.keys()] } },
-    include: PRICED_PRODUCT_INCLUDE,
-  });
+  const products = await priceableProducts([...wanted.keys()]);
 
   if (products.length !== wanted.size) {
     return NextResponse.json(
@@ -135,117 +114,75 @@ export async function POST(req: NextRequest) {
     partNumber: p.partNumber,
     name: p.name,
     quantity: wanted.get(p.id)!,
-    unitPrice: priceFor(p, ctx)?.netBase ?? purchasePriceOf(p),
+    unitPrice: priceForRow(p, ctx)?.netBase ?? rowPurchasePrice(p),
   }));
 
   const total = roundMoney(lines.reduce((sum, l) => sum + l.unitPrice * l.quantity, 0));
 
   // The tier's minimum order is a rule the schema already carries; enforce it
   // here rather than letting it sit unused.
-  const category = session.categoryId
-    ? await prisma.clientCategory.findUnique({ where: { id: session.categoryId } })
-    : null;
+  const tier = session.categoryId ? await tierById(session.categoryId) : null;
 
   // Compared in the base currency, where both figures are denominated. Doing
   // it after conversion would make the threshold trivial to clear on a weak
   // currency and impossible on a strong one, for the same basket.
-  if (category && category.minOrderAmount > 0 && total < category.minOrderAmount) {
+  if (tier && tier.minOrderAmount > 0 && total < tier.minOrderAmount) {
     return NextResponse.json(
       {
-        error: `Orders on the ${category.name} tier start at ${symbol}${roundMoney(
-          category.minOrderAmount * rate
+        error: `Orders on the ${tier.name} tier start at ${symbol}${roundMoney(
+          tier.minOrderAmount * rate
         ).toFixed(2)}. This one comes to ${symbol}${roundMoney(total * rate).toFixed(2)}.`,
       },
       { status: 409 }
     );
   }
 
-  // reference is unique; a collision is unlikely but cheap to retry.
-  for (let attempt = 0; attempt < 5; attempt++) {
-    try {
-      // The order and the stock it draws on are written together. Recording an
-      // order that failed to hold its stock would promise goods twice; holding
-      // stock for an order that failed to save would strand it.
-      const order = await prisma.$transaction(async (tx) => {
-        const created = await tx.order.create({
-          data: {
-            reference: makeReference(),
-            clientId: session.userId,
-            currencyCode,
-            currencyRate: rate,
-            items: {
-              create: lines.map((l) => ({
-                productId: l.productId,
-                quantity: l.quantity,
-                unitPrice: l.unitPrice,
-              })),
-            },
-          },
-          include: { items: true },
-        });
+  try {
+    const order = await placeOrder({
+      clientId: session.userId,
+      currencyCode,
+      currencyRate: rate,
+      lines: lines.map((l) => ({
+        productId: l.productId,
+        quantity: l.quantity,
+        unitPrice: l.unitPrice,
+      })),
+      reference: makeReference,
+    });
 
-        const held = await reserveStock(
-          tx,
-          lines.map((l) => ({ productId: l.productId, quantity: l.quantity }))
-        );
-        if (!held.ok) throw new OutOfStock(held.shortfall);
-
-        // One line per part — `wanted` deduplicated them — so this is 1:1.
-        const lineIdByProduct = new Map(created.items.map((i) => [i.productId, i.id]));
-
-        if (held.allocations.length > 0) {
-          await tx.orderItemAllocation.createMany({
-            data: held.allocations.map((a) => ({
-              orderItemId: lineIdByProduct.get(a.productId)!,
-              warehouseId: a.warehouseId,
-              quantity: a.quantity,
-            })),
-          });
-        }
-
-        return created;
-      });
-
-      return NextResponse.json(
-        {
-          order: {
-            id: order.id,
-            reference: order.reference,
-            status: order.status,
-            createdAt: order.createdAt.toISOString(),
-            total,
-            lines,
-          },
+    return NextResponse.json(
+      {
+        order: {
+          id: order.id,
+          reference: order.reference,
+          status: order.status,
+          createdAt: order.createdAt.toISOString(),
+          total,
+          lines,
         },
-        { status: 201 }
-      );
-    } catch (e) {
-      if (e instanceof OutOfStock) {
-        const { productId, wanted, available } = e.shortfall;
-        const part = products.find((p) => p.id === productId);
-        const label = part ? `${part.partNumber} (${part.name})` : 'A part in your cart';
+      },
+      { status: 201 }
+    );
+  } catch (e) {
+    if (!(e instanceof OutOfStock)) throw e;
 
-        return NextResponse.json(
-          {
-            error:
-              available === 0
-                ? // Covers both an empty shelf and a part nobody has counted:
-                  // to a customer they are the same answer, and naming the
-                  // bookkeeping difference would explain nothing they can act on.
-                  `${label} is out of stock. Remove it and try again.`
-                : `Only ${available} of ${label} ${available === 1 ? 'is' : 'are'} available, and you asked for ${wanted}.`,
-            productId,
-            available,
-          },
-          { status: 409 }
-        );
-      }
+    const { productId, wanted: asked, available } = e.shortfall;
+    const part = products.find((p) => p.id === productId);
+    const label = part ? `${part.partNumber} (${part.name})` : 'A part in your cart';
 
-      const clash =
-        typeof e === 'object' && e !== null && (e as { code?: string }).code === 'P2002';
-      if (!clash || attempt === 4) throw e;
-    }
+    return NextResponse.json(
+      {
+        error:
+          available === 0
+            ? // Covers both an empty shelf and a part nobody has counted: to a
+              // customer they are the same answer, and naming the bookkeeping
+              // difference would explain nothing they can act on.
+              `${label} is out of stock. Remove it and try again.`
+            : `Only ${available} of ${label} ${available === 1 ? 'is' : 'are'} available, and you asked for ${asked}.`,
+        productId,
+        available,
+      },
+      { status: 409 }
+    );
   }
-
-  return NextResponse.json({ error: 'Could not place that order.' }, { status: 500 });
 }

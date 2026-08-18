@@ -1,5 +1,5 @@
 import 'server-only';
-import type { Prisma } from '@prisma/client';
+import type { Tx } from '@/lib/sql';
 
 /**
  * Moving stock as orders move.
@@ -58,27 +58,24 @@ interface AvailableRow {
 /**
  * Holds stock for an order, inside the caller's transaction.
  *
- * Must be called within `prisma.$transaction` — the row locks it takes are
- * what stop two customers being sold the same last unit, and they last until
- * that transaction ends. Called outside one, each statement commits on its own
- * and the locks are released immediately, which is the oversell this exists to
- * prevent.
+ * Takes a `Tx`, not the plain query helper, and that is the whole point: the
+ * row locks below last exactly as long as their transaction. Run these
+ * statements outside one and each commits on its own, the locks lift
+ * immediately, and two customers can be sold the same last unit — which is
+ * what this exists to prevent. The type is what stops it being called wrongly.
  *
  * Warehouses are drawn in `priority` order, highest first, which is what the
  * column is for. A line that one site cannot fill alone is split across the
  * next ones rather than refused.
  */
-export async function reserveStock(
-  tx: Prisma.TransactionClient,
-  needs: StockNeed[]
-): Promise<ReserveResult> {
+export async function reserveStock(t: Tx, needs: StockNeed[]): Promise<ReserveResult> {
   const allocations: Allocation[] = [];
 
   for (const need of needs) {
     // FOR UPDATE OF s locks the stock rows for the rest of the transaction, so
     // the availability read below cannot go stale between here and the write.
     // Only StockLevel is locked; the warehouse rows are read, not claimed.
-    const rows = await tx.$queryRaw<AvailableRow[]>`
+    const rows = await t.sql<AvailableRow>`
       SELECT s."id", s."warehouseId", s."quantity" - s."reserved" AS available
       FROM "StockLevel" s
       JOIN "Warehouse" w ON w."id" = s."warehouseId"
@@ -106,10 +103,10 @@ export async function reserveStock(
       const take = Math.min(outstanding, Number(row.available));
       if (take <= 0) continue;
 
-      await tx.stockLevel.update({
-        where: { id: row.id },
-        data: { reserved: { increment: take } },
-      });
+      await t.sql`
+        UPDATE "StockLevel" SET "reserved" = "reserved" + ${take}
+        WHERE "id" = ${row.id}
+      `;
 
       allocations.push({ productId: need.productId, warehouseId: row.warehouseId, quantity: take });
       outstanding -= take;
@@ -136,24 +133,27 @@ export async function reserveStock(
  * moves nothing the second time.
  */
 export async function applyShipmentChange(
-  tx: Prisma.TransactionClient,
+  t: Tx,
   orderId: string,
   wasShipped: boolean,
   isShipped: boolean
 ): Promise<void> {
   if (wasShipped === isShipped) return;
 
-  const allocations = await tx.orderItemAllocation.findMany({
-    where: { orderItem: { orderId } },
-    select: { warehouseId: true, quantity: true, orderItem: { select: { productId: true } } },
-  });
+  // Signed once here rather than per statement: leaving is negative, coming
+  // back is positive, and both columns move by the same amount either way so
+  // `reserved <= quantity` survives the trip.
+  const direction = isShipped ? -1 : 1;
 
-  for (const a of allocations) {
-    const delta = isShipped ? -a.quantity : a.quantity;
-
-    await tx.stockLevel.updateMany({
-      where: { productId: a.orderItem.productId, warehouseId: a.warehouseId },
-      data: { quantity: { increment: delta }, reserved: { increment: delta } },
-    });
-  }
+  await t.sql`
+    UPDATE "StockLevel" s
+    SET "quantity" = s."quantity" + (a."quantity" * ${direction}),
+        "reserved" = s."reserved" + (a."quantity" * ${direction}),
+        "updatedAt" = now()
+    FROM "OrderItemAllocation" a
+    JOIN "OrderItem" i ON i."id" = a."orderItemId"
+    WHERE i."orderId" = ${orderId}
+      AND s."productId" = i."productId"
+      AND s."warehouseId" = a."warehouseId"
+  `;
 }
