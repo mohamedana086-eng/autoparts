@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
 import {
-  availabilityOf, idsByFuzzyMatch, idsMatchingNormalisedPartNumber, loadPricingContext,
-  normalisePartNumber, priceFor, PRICED_PRODUCT_INCLUDE, STOCK_INCLUDE,
+  idsByFuzzyMatch, idsMatchingNormalisedPartNumber, loadPricingContext,
+  normalisePartNumber, priceForRow, rowPurchasePrice,
 } from '@/lib/catalog';
+import {
+  interchangesFor, productsByIds, searchProducts, supplierNameBySlug, systemNameBySlug,
+  variantLabel, type InterchangeRow, type SearchRow,
+} from '@/lib/search';
 import { RELIABILITIES, isReliability } from '@/lib/supplier-classification';
 
 type Sort = 'relevance' | 'price-asc' | 'price-desc' | 'delivery';
 const SORTS: Sort[] = ['relevance', 'price-asc', 'price-desc', 'delivery'];
-
 
 /** Why a row came back, so the UI can explain non-obvious hits. */
 type MatchedOn =
@@ -98,71 +100,25 @@ export async function GET(req: NextRequest) {
 
   // Every word has to land somewhere, but not all in the same field — that is
   // what lets "bosch brake pad" work, where the brand is on one column and the
-  // rest of the words are on another.
+  // rest of the words are on another. The query itself is in lib/search.ts.
   const tokens = q.split(/\s+/).filter(Boolean);
-  const tokenClauses = tokens.map((t) => ({
-    OR: [
-      { partNumber: { contains: t, mode: 'insensitive' as const } },
-      { name: { contains: t, mode: 'insensitive' as const } },
-      { description: { contains: t, mode: 'insensitive' as const } },
-      { manufacturer: { name: { contains: t, mode: 'insensitive' as const } } },
-      { interchanges: { some: { targetPartNo: { contains: t, mode: 'insensitive' as const } } } },
-    ],
-  }));
 
   // Separated part numbers and cross-references need a scan, so resolve them
   // to ids first. Kept as its own branch so `0 986 424 815` still lands on the
   // part directly rather than depending on each fragment matching.
   const normalisedIds = q ? await idsMatchingNormalisedPartNumber(q) : [];
 
-  // Filtered by the query only. System and brand are applied below so their
-  // facet counts can be taken before each one narrows the list.
-  const include = {
-    ...PRICED_PRODUCT_INCLUDE,
-    interchanges: true,
-    supplier: true,
-    // The leading picture only. Order alone decides which one that is — see
-    // ProductImage in the schema — so the first by sortOrder is the primary,
-    // and a result row has no use for the rest. Taken as part of this query
-    // rather than looked up per row, which at fifty results would be fifty
-    // round trips to render one thumbnail each.
-    images: { orderBy: { sortOrder: 'asc' as const }, take: 1, select: { url: true, alt: true } },
-    ...STOCK_INCLUDE,
-  } as const;
+  // The vehicle and supplier filters narrow the catalogue itself, so they run
+  // in the query. System and brand are applied further down, after their facet
+  // counts have been taken — a count already narrowed by its own filter tells
+  // the customer nothing about what else they could pick.
+  const narrow = { variant, supplier };
 
-  // A vehicle narrows the catalogue to what actually fits it, and composes
-  // with everything else rather than replacing it.
-  const fitsVehicle = variant ? { fitments: { some: { variantId: variant } } } : {};
-  // Matched by slug so a supplier's page URL is the same value the filter uses.
-  const fromSupplier = supplier ? { supplier: { slug: supplier } } : {};
-
-  let [matches, systemRecord, variantRecord, supplierRecord, ctx] = await Promise.all([
-    prisma.product.findMany({
-      where: {
-        AND: [
-          q
-            ? {
-                OR: [
-                  ...(normalisedIds.length ? [{ id: { in: normalisedIds } }] : []),
-                  ...(tokenClauses.length ? [{ AND: tokenClauses }] : []),
-                ],
-              }
-            : {},
-          fitsVehicle,
-          fromSupplier,
-        ],
-      },
-      include,
-      take: MAX_RESULTS,
-    }),
-    system ? prisma.vehicleSystem.findUnique({ where: { slug: system } }) : Promise.resolve(null),
-    variant
-      ? prisma.vehicleVariant.findUnique({
-          where: { id: variant },
-          include: { model: { include: { make: true } } },
-        })
-      : Promise.resolve(null),
-    supplier ? prisma.supplier.findUnique({ where: { slug: supplier } }) : Promise.resolve(null),
+  let [matches, systemName, variantName, supplierName, ctx] = await Promise.all([
+    searchProducts({ tokens, normalisedIds, ...narrow, limit: MAX_RESULTS }),
+    system ? systemNameBySlug(system) : Promise.resolve(null),
+    variant ? variantLabel(variant) : Promise.resolve(null),
+    supplier ? supplierNameBySlug(supplier) : Promise.resolve(null),
     loadPricingContext(),
   ]);
 
@@ -172,10 +128,7 @@ export async function GET(req: NextRequest) {
   if (q && matches.length === 0) {
     const closeIds = await idsByFuzzyMatch(q);
     if (closeIds.length) {
-      const close = await prisma.product.findMany({
-        where: { AND: [{ id: { in: closeIds } }, fitsVehicle, fromSupplier] },
-        include,
-      });
+      const close = await productsByIds(closeIds, narrow);
       // Keep the order the similarity scoring produced.
       const rank = new Map(closeIds.map((id, i) => [id, i]));
       close.sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0));
@@ -184,22 +137,29 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Cross-references for whatever came back, in one query. Joined onto the
+  // rows above they would multiply every product by its references and have to
+  // be folded back together anyway.
+  const crossRefs = new Map<string, InterchangeRow[]>();
+  for (const row of await interchangesFor(matches.map((m) => m.id))) {
+    const list = crossRefs.get(row.sourceId);
+    if (list) list.push(row);
+    else crossRefs.set(row.sourceId, [row]);
+  }
+  const interchangesOf = (p: SearchRow) => crossRefs.get(p.id) ?? [];
+
   const systemCounts = new Map<string, { slug: string; name: string; count: number }>();
   for (const p of matches) {
-    const entry = systemCounts.get(p.vehicleSystem.slug);
+    const entry = systemCounts.get(p.systemSlug);
     if (entry) entry.count++;
-    else systemCounts.set(p.vehicleSystem.slug, {
-      slug: p.vehicleSystem.slug,
-      name: p.vehicleSystem.name,
-      count: 1,
-    });
+    else systemCounts.set(p.systemSlug, { slug: p.systemSlug, name: p.systemName, count: 1 });
   }
 
-  const inSystem = system ? matches.filter((p) => p.vehicleSystem.slug === system) : matches;
+  const inSystem = system ? matches.filter((p) => p.systemSlug === system) : matches;
 
   const brandCounts = new Map<string, number>();
   for (const p of inSystem) {
-    brandCounts.set(p.manufacturer.name, (brandCounts.get(p.manufacturer.name) ?? 0) + 1);
+    brandCounts.set(p.manufacturerName, (brandCounts.get(p.manufacturerName) ?? 0) + 1);
   }
 
   // Counted per exact rating rather than per threshold, so the UI can build
@@ -210,8 +170,7 @@ export async function GET(req: NextRequest) {
   // not narrowed by the rating filter itself.
   const ratingCounts = new Map<number, number>();
   for (const p of inSystem) {
-    const key = p.supplier?.rating ?? 0;
-    ratingCounts.set(key, (ratingCounts.get(key) ?? 0) + 1);
+    ratingCounts.set(p.supplierRating ?? 0, (ratingCounts.get(p.supplierRating ?? 0) ?? 0) + 1);
   }
 
   // Counted on the same set as the brand and rating facets, so each filter
@@ -220,12 +179,12 @@ export async function GET(req: NextRequest) {
   const reliabilityCounts = new Map<string, number>();
   let returnsCount = 0;
   for (const p of inSystem) {
-    if (p.supplier) {
+    if (p.supplierReliability) {
       reliabilityCounts.set(
-        p.supplier.reliability,
-        (reliabilityCounts.get(p.supplier.reliability) ?? 0) + 1
+        p.supplierReliability,
+        (reliabilityCounts.get(p.supplierReliability) ?? 0) + 1
       );
-      if (p.supplier.acceptsReturns === true) returnsCount++;
+      if (p.supplierAcceptsReturns === true) returnsCount++;
     }
   }
 
@@ -248,21 +207,21 @@ export async function GET(req: NextRequest) {
    * ranking is what made the options disappear on any query that landed on a
    * name instead of a number.
    */
-  const hitsFor = (p: (typeof inSystem)[number]): Record<MatchIn, boolean> => ({
+  const hitsFor = (p: SearchRow): Record<MatchIn, boolean> => ({
     'part-number': !!q && numberHit(p.partNumber),
-    oem: !!q && p.interchanges.some((i) => i.isOEM && numberHit(i.targetPartNo)),
-    aftermarket: !!q && p.interchanges.some((i) => !i.isOEM && numberHit(i.targetPartNo)),
+    oem: !!q && interchangesOf(p).some((i) => i.isOEM && numberHit(i.targetPartNo)),
+    aftermarket: !!q && interchangesOf(p).some((i) => !i.isOEM && numberHit(i.targetPartNo)),
   });
 
   const scored = inSystem
-    .filter((p) => !manufacturer || p.manufacturer.name.toLowerCase() === manufacturer.toLowerCase())
-    .filter((p) => minRating === null || (p.supplier?.rating ?? 0) >= minRating)
-    .filter((p) => !reliability || p.supplier?.reliability === reliability)
-    .filter((p) => !returnsOnly || p.supplier?.acceptsReturns === true)
+    .filter((p) => !manufacturer || p.manufacturerName.toLowerCase() === manufacturer.toLowerCase())
+    .filter((p) => minRating === null || (p.supplierRating ?? 0) >= minRating)
+    .filter((p) => !reliability || p.supplierReliability === reliability)
+    .filter((p) => !returnsOnly || p.supplierAcceptsReturns === true)
     .map((p, index) => {
       const normalisedPart = normalisePartNumber(p.partNumber);
       const name = p.name.toLowerCase();
-      const brand = p.manufacturer.name.toLowerCase();
+      const brand = p.manufacturerName.toLowerCase();
       const description = (p.description ?? '').toLowerCase();
 
       let rank = 8;
@@ -296,7 +255,7 @@ export async function GET(req: NextRequest) {
         rank = 5;
         matchedOn = 'description';
       } else {
-        const crosses = p.interchanges.filter(
+        const crosses = interchangesOf(p).filter(
           (i) =>
             i.targetPartNo.toLowerCase().includes(lower) ||
             (!!needle && normalisePartNumber(i.targetPartNo).includes(needle))
@@ -313,7 +272,7 @@ export async function GET(req: NextRequest) {
         }
       }
 
-      const pricing = priceFor(p, ctx);
+      const pricing = priceForRow(p, ctx);
 
       return {
         rank,
@@ -322,28 +281,29 @@ export async function GET(req: NextRequest) {
           id: p.id,
           partNumber: p.partNumber,
           name: p.name,
-          manufacturer: p.manufacturer.name,
-          system: p.vehicleSystem.name,
-          systemSlug: p.vehicleSystem.slug,
+          manufacturer: p.manufacturerName,
+          system: p.systemName,
+          systemSlug: p.systemSlug,
           stockDays: p.stockDays,
-          price: pricing?.finalPrice ?? p.basePrice,
+          price: pricing?.finalPrice ?? rowPurchasePrice(p),
           appliedRule: pricing?.appliedRule ?? null,
           // Null where nobody has added a picture, which today is every part.
           // The alt falls back to the part's name at the point it is rendered,
           // as the schema says it should.
-          image: p.images[0] ? { url: p.images[0].url, alt: p.images[0].alt } : null,
+          image: p.imageUrl ? { url: p.imageUrl, alt: p.imageAlt } : null,
           // Null where nobody has counted this part in — not the same as none
-          // left, and rendered as the lead time with no stock claim at all.
-          available: availabilityOf(p),
+          // left. SUM over no shelves is null, so the distinction survives the
+          // query rather than being reconstructed here.
+          available: p.available,
           // Carried on the row so a result can show who it comes from and how
           // they rate, which is what makes the rating filter legible.
-          supplier: p.supplier
+          supplier: p.supplierSlug
             ? {
-                slug: p.supplier.slug,
-                name: p.supplier.name,
-                rating: p.supplier.rating,
-                reliability: p.supplier.reliability,
-                acceptsReturns: p.supplier.acceptsReturns,
+                slug: p.supplierSlug,
+                name: p.supplierName!,
+                rating: p.supplierRating,
+                reliability: p.supplierReliability!,
+                acceptsReturns: p.supplierAcceptsReturns,
               }
             : null,
           matchedOn,
@@ -398,15 +358,13 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     query: q,
-    systemName: systemRecord?.name ?? null,
+    systemName,
     system: system ?? null,
     manufacturer: manufacturer ?? null,
     variant: variant ?? null,
-    variantLabel: variantRecord
-      ? `${variantRecord.model.make.name} ${variantRecord.model.name} ${variantRecord.name}`
-      : null,
+    variantLabel: variantName,
     supplier: supplier ?? null,
-    supplierName: supplierRecord?.name ?? null,
+    supplierName,
     minRating,
     reliability: reliability ?? null,
     returns: returnsOnly,
