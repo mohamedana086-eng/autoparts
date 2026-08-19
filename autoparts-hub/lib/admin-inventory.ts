@@ -147,49 +147,7 @@ export function readStockRows(body: Record<string, unknown>): Result<StockRowInp
   return { ok: true, value: rows };
 }
 
-export function serialiseWarehouse(w: {
-  id: string; code: string; name: string; city: string | null; address: string | null;
-  active: boolean; priority: number;
-  stock?: { quantity: number; reserved: number }[];
-  _count?: { outlets: number; stock: number };
-}) {
-  const quantity = (w.stock ?? []).reduce((sum, s) => sum + s.quantity, 0);
-  const reserved = (w.stock ?? []).reduce((sum, s) => sum + s.reserved, 0);
 
-  return {
-    id: w.id,
-    code: w.code,
-    name: w.name,
-    city: w.city,
-    address: w.address,
-    active: w.active,
-    priority: w.priority,
-    outletCount: w._count?.outlets ?? 0,
-    /** Distinct parts held here, not units. */
-    skuCount: w._count?.stock ?? 0,
-    totalQuantity: quantity,
-    totalReserved: reserved,
-  };
-}
-
-export function serialiseOutlet(o: {
-  id: string; code: string; name: string; city: string | null; address: string | null;
-  phone: string | null; warehouseId: string | null; active: boolean;
-  warehouse?: { name: string; code: string } | null;
-}) {
-  return {
-    id: o.id,
-    code: o.code,
-    name: o.name,
-    city: o.city,
-    address: o.address,
-    phone: o.phone,
-    warehouseId: o.warehouseId,
-    warehouseName: o.warehouse?.name ?? null,
-    warehouseCode: o.warehouse?.code ?? null,
-    active: o.active,
-  };
-}
 
 export function serialiseStockLevel(s: {
   id: string; warehouseId: string; quantity: number; reserved: number;
