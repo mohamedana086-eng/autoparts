@@ -1,12 +1,29 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
 import { requireAdmin } from '@/lib/admin-guard';
 import { isSitePath } from '@/lib/site-link';
+import {
+  clientExists, notificationRecipients, sendNotification, sentNotifications,
+  type AdminNotificationRow,
+} from '@/lib/admin-desk';
 
 // Not exported: Next only lets a route module export its handlers and a fixed
 // set of config names, and exporting anything else breaks the generated route
 // types — the same constraint that put the product helpers in lib/.
 const NOTIFICATION_TYPES = ['system', 'order', 'stock', 'account'] as const;
+
+function serialise(n: AdminNotificationRow) {
+  return {
+    id: n.id,
+    clientId: n.clientId,
+    clientName: n.clientName,
+    type: n.type,
+    title: n.title,
+    body: n.body,
+    link: n.link,
+    readAt: n.readAt?.toISOString() ?? null,
+    createdAt: n.createdAt.toISOString(),
+  };
+}
 
 // GET /api/admin/notifications — what has been sent, and who it can be sent to.
 export async function GET() {
@@ -14,28 +31,11 @@ export async function GET() {
   if (denied) return denied;
 
   const [notifications, recipients] = await Promise.all([
-    prisma.notification.findMany({
-      include: { client: { select: { name: true, email: true } } },
-      orderBy: { createdAt: 'desc' },
-      take: 200,
-    }),
-    prisma.client.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true, email: true } }),
+    sentNotifications(),
+    notificationRecipients(),
   ]);
 
-  return NextResponse.json({
-    notifications: notifications.map((n) => ({
-      id: n.id,
-      clientId: n.clientId,
-      clientName: n.client.name,
-      type: n.type,
-      title: n.title,
-      body: n.body,
-      link: n.link,
-      readAt: n.readAt?.toISOString() ?? null,
-      createdAt: n.createdAt.toISOString(),
-    })),
-    recipients: recipients.map((c) => ({ id: c.id, name: `${c.name} — ${c.email}` })),
-  });
+  return NextResponse.json({ notifications: notifications.map(serialise), recipients });
 }
 
 // POST /api/admin/notifications — send one to an account.
@@ -78,28 +78,13 @@ export async function POST(req: Request) {
     );
   }
 
-  const client = await prisma.client.findUnique({ where: { id: clientId } });
-  if (!client) return NextResponse.json({ error: 'Unknown account.' }, { status: 400 });
+  if (!(await clientExists(clientId))) {
+    return NextResponse.json({ error: 'Unknown account.' }, { status: 400 });
+  }
 
-  const notification = await prisma.notification.create({
-    data: { clientId, type, title, body: messageBody || null, link: link || null },
-    include: { client: { select: { name: true, email: true } } },
+  const notification = await sendNotification({
+    clientId, type, title, body: messageBody || null, link: link || null,
   });
 
-  return NextResponse.json(
-    {
-      notification: {
-        id: notification.id,
-        clientId: notification.clientId,
-        clientName: notification.client.name,
-        type: notification.type,
-        title: notification.title,
-        body: notification.body,
-        link: notification.link,
-        readAt: null,
-        createdAt: notification.createdAt.toISOString(),
-      },
-    },
-    { status: 201 }
-  );
+  return NextResponse.json({ notification: serialise(notification) }, { status: 201 });
 }
