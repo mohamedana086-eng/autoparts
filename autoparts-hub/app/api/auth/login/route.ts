@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
 import { verifyPassword, createSession, toRole } from '@/lib/auth';
+import { byEmailForSignIn } from '@/lib/clients';
 
 // POST /api/auth/login { email, password }
 export async function POST(req: NextRequest) {
@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Please enter your email and password.' }, { status: 400 });
   }
 
-  const client = await prisma.client.findUnique({ where: { email } });
+  const client = await byEmailForSignIn(email);
 
   // Same message either way, so this cannot be used to enumerate accounts.
   if (!client || !client.passwordHash || !(await verifyPassword(password, client.passwordHash))) {

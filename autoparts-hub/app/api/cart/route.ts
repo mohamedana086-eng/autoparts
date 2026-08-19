@@ -1,62 +1,7 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
-import {
-  loadPricingContext, priceFor, purchasePriceOf, sellableQuantity,
-  PRICED_PRODUCT_INCLUDE, STOCK_INCLUDE, type PricingContext,
-} from '@/lib/catalog';
-
-/** Every basket line the API returns, from either verb. Not exported: a route
- *  module may only export its handlers, so this stays local — the same
- *  constraint that put the admin helpers in lib/. */
-type BasketLine = {
-  productId: string;
-  quantity: number;
-  product: {
-    partNumber: string;
-    name: string;
-    basePrice: number;
-    stockDays: number;
-    manufacturer: { name: string };
-    vehicleSystem: { slug: string };
-    priceListItems?: { price: number }[];
-    stock?: { quantity: number; reserved: number }[];
-  };
-};
-
-/** What the product rows a basket line needs look like, for both queries. */
-const WITH_PRICING = {
-  items: {
-    include: { product: { include: { ...PRICED_PRODUCT_INCLUDE, ...STOCK_INCLUDE } } },
-    orderBy: { addedAt: 'asc' as const },
-  },
-} as const;
-
-function serialiseBasket(
-  items: BasketLine[],
-  ctx: PricingContext,
-  updatedAt: Date | null
-) {
-  return {
-    updatedAt: updatedAt?.toISOString() ?? null,
-    items: items.map((i) => ({
-      productId: i.productId,
-      partNumber: i.product.partNumber,
-      name: i.product.name,
-      manufacturer: i.product.manufacturer.name,
-      stockDays: i.product.stockDays,
-      // Falls back to the purchase price only when no tier resolves at all,
-      // which is the same fallback the order endpoint uses.
-      unitPrice: priceFor(i.product, ctx)?.finalPrice ?? purchasePriceOf(i.product),
-      quantity: i.quantity,
-      // What the basket may hold of this part. Sent so the cart can hold its
-      // own quantity control to it instead of finding out at checkout, and
-      // resolved fresh on every read — a basket saved last week has no claim
-      // on stock that has since been sold.
-      available: sellableQuantity(i.product),
-    })),
-  };
-}
+import { loadPricingContext, priceForRow, rowPurchasePrice } from '@/lib/catalog';
+import { basketFor, knownProductIds, replaceBasket, type Basket } from '@/lib/cart';
 
 /**
  * The signed-in account's saved basket.
@@ -70,20 +15,38 @@ function serialiseBasket(
  * the caller's own tier, on every request. That is what lets a basket restored
  * on a new device render as a basket rather than a list of part numbers, and
  * it cannot drift, because nothing keeps it.
- *
- * The Angular cart still lives in localStorage too. This is the copy that
- * survives a new device, and the one the admin's open-baskets list reads.
  */
+async function serialise(basket: Basket) {
+  const ctx = await loadPricingContext();
+
+  return {
+    updatedAt: basket.updatedAt?.toISOString() ?? null,
+    items: basket.items.map((line) => ({
+      productId: line.productId,
+      partNumber: line.partNumber,
+      name: line.name,
+      manufacturer: line.manufacturerName,
+      stockDays: line.stockDays,
+      // Falls back to the purchase price only when no tier resolves at all,
+      // which is the same fallback the order endpoint uses.
+      unitPrice: priceForRow(line, ctx)?.finalPrice ?? rowPurchasePrice(line),
+      quantity: line.quantity,
+      // What the basket may hold of this part. Sent so the cart can hold its
+      // own quantity control to it instead of finding out at checkout, and
+      // resolved fresh on every read — a basket saved last week has no claim
+      // on stock that has since been sold.
+      // Null means nobody counted the part, which sells nothing — the same
+      // collapse sellableQuantity makes, on a figure the query already summed.
+      available: line.available ?? 0,
+    })),
+  };
+}
+
 export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
 
-  const [cart, ctx] = await Promise.all([
-    prisma.cart.findUnique({ where: { clientId: session.userId }, include: WITH_PRICING }),
-    loadPricingContext(),
-  ]);
-
-  return NextResponse.json(serialiseBasket(cart?.items ?? [], ctx, cart?.updatedAt ?? null));
+  return NextResponse.json(await serialise(await basketFor(session.userId)));
 }
 
 /**
@@ -130,7 +93,7 @@ export async function PUT(req: Request) {
   }
 
   const ids = [...wanted.keys()];
-  const known = await prisma.product.findMany({ where: { id: { in: ids } }, select: { id: true } });
+  const known = await knownProductIds(ids);
   if (known.length !== ids.length) {
     // A part deleted from the catalogue since it was added. Naming it would
     // mean loading rows the caller may not have asked about; the client
@@ -138,38 +101,10 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: 'A part in that basket is no longer in the catalogue.' }, { status: 409 });
   }
 
-  const [cart, ctx] = await Promise.all([
-    prisma.$transaction(async (tx) => {
-      const existing = await tx.cart.upsert({
-        where: { clientId: session.userId },
-        create: { clientId: session.userId },
-        update: {},
-      });
+  const basket = await replaceBasket(
+    session.userId,
+    [...wanted].map(([productId, quantity]) => ({ productId, quantity }))
+  );
 
-      await tx.cartItem.deleteMany({
-        where: { cartId: existing.id, productId: { notIn: ids.length > 0 ? ids : ['—none—'] } },
-      });
-
-      for (const [productId, quantity] of wanted) {
-        await tx.cartItem.upsert({
-          where: { cartId_productId: { cartId: existing.id, productId } },
-          create: { cartId: existing.id, productId, quantity },
-          update: { quantity },
-        });
-      }
-
-      // Touched explicitly: @updatedAt only fires on a write to Cart itself,
-      // and every change above was to its items. The admin's open-baskets list
-      // is ordered by this, so a basket edited today must not read as
-      // untouched.
-      return tx.cart.update({
-        where: { id: existing.id },
-        data: { updatedAt: new Date() },
-        include: WITH_PRICING,
-      });
-    }),
-    loadPricingContext(),
-  ]);
-
-  return NextResponse.json(serialiseBasket(cart.items, ctx, cart.updatedAt));
+  return NextResponse.json(await serialise(basket));
 }

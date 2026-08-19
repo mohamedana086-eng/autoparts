@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { markAllRead, notificationsFor } from '@/lib/notifications';
 
 /**
  * GET /api/notifications — the signed-in account's own.
@@ -13,14 +13,7 @@ export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
 
-  const [notifications, unread] = await Promise.all([
-    prisma.notification.findMany({
-      where: { clientId: session.userId },
-      orderBy: { createdAt: 'desc' },
-      take: 50,
-    }),
-    prisma.notification.count({ where: { clientId: session.userId, readAt: null } }),
-  ]);
+  const { notifications, unread } = await notificationsFor(session.userId);
 
   return NextResponse.json({
     unread,
@@ -43,10 +36,7 @@ export async function POST() {
 
   // Only the ones still unread, so a second call cannot rewrite when the
   // earlier ones were seen.
-  const result = await prisma.notification.updateMany({
-    where: { clientId: session.userId, readAt: null },
-    data: { readAt: new Date() },
-  });
+  const marked = await markAllRead(session.userId);
 
-  return NextResponse.json({ ok: true, marked: result.count });
+  return NextResponse.json({ ok: true, marked });
 }

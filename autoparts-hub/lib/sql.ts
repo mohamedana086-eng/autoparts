@@ -1,5 +1,5 @@
 import 'server-only';
-import { neon, Pool, type PoolClient } from '@neondatabase/serverless';
+import { neon, Pool, types, type PoolClient } from '@neondatabase/serverless';
 
 /**
  * Talking to Postgres.
@@ -19,6 +19,25 @@ import { neon, Pool, type PoolClient } from '@neondatabase/serverless';
  * `WHERE id = $1`. There is deliberately no way to pass a whole query as a
  * string, so there is no comfortable way to write an injection.
  */
+
+/**
+ * Read TIMESTAMP columns as UTC.
+ *
+ * The schema's timestamps are `TIMESTAMP(3)` — no time zone — and the driver
+ * parses those in the process's own zone, so the same stored row came back
+ * three hours out on a machine at UTC+3 and exactly right on one at UTC. Prisma
+ * always read them as UTC, which is also what wrote them, so this restores the
+ * reading rather than changing it.
+ *
+ * Set once at module load: the parser is global to the driver, and doing it per
+ * connection would leave whichever path ran first deciding the answer.
+ */
+const TIMESTAMP_OID = 1114;
+types.setTypeParser(TIMESTAMP_OID, (value: string) =>
+  // Postgres renders these without an offset; naming the zone the value is
+  // already in is the whole fix.
+  new Date(value.endsWith('Z') ? value : value.replace(' ', 'T') + 'Z')
+);
 
 function connectionString(): string {
   const url = process.env.DATABASE_URL;
