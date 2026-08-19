@@ -194,13 +194,17 @@ export function serialiseOutlet(o: {
 export function serialiseStockLevel(s: {
   id: string; warehouseId: string; quantity: number; reserved: number;
   binLocation: string | null; updatedAt: Date;
-  warehouse?: { name: string; code: string };
+  // Flat, because the join returns columns. This read the warehouse out of a
+  // nested object while the query aliased it alongside the rest, so the name
+  // and code came back null on every row and the stock editor showed a
+  // warehouse it could not name.
+  warehouseName?: string | null; warehouseCode?: string | null;
 }) {
   return {
     id: s.id,
     warehouseId: s.warehouseId,
-    warehouseName: s.warehouse?.name ?? null,
-    warehouseCode: s.warehouse?.code ?? null,
+    warehouseName: s.warehouseName ?? null,
+    warehouseCode: s.warehouseCode ?? null,
     quantity: s.quantity,
     reserved: s.reserved,
     /** What can still be sold. Derived, never stored — see the schema. */
