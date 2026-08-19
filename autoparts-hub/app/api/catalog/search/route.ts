@@ -343,16 +343,32 @@ export async function GET(req: NextRequest) {
       (maxPrice === null || s.product.price <= maxPrice)
   );
 
+  // Part number breaks every remaining tie. Without it two parts that agree
+  // on the sort key — two brake pad sets both called "Brake pad set, front",
+  // at the same rank — come back in whichever order the rows arrived in, which
+  // nothing decides and which changes when unrelated rows move. The same
+  // search twice running should read the same twice running.
+  const byPartNumber = (a: (typeof withinPrice)[number], b: (typeof withinPrice)[number]) =>
+    a.product.partNumber.localeCompare(b.product.partNumber);
+
   withinPrice.sort((a, b) => {
     switch (sort) {
       case 'price-asc':
-        return a.product.price - b.product.price;
+        return a.product.price - b.product.price || byPartNumber(a, b);
       case 'price-desc':
-        return b.product.price - a.product.price;
+        return b.product.price - a.product.price || byPartNumber(a, b);
       case 'delivery':
-        return a.product.stockDays - b.product.stockDays || a.product.price - b.product.price;
+        return (
+          a.product.stockDays - b.product.stockDays ||
+          a.product.price - b.product.price ||
+          byPartNumber(a, b)
+        );
       default:
-        return a.rank - b.rank || a.product.name.localeCompare(b.product.name);
+        return (
+          a.rank - b.rank ||
+          a.product.name.localeCompare(b.product.name) ||
+          byPartNumber(a, b)
+        );
     }
   });
 

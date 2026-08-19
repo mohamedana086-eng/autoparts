@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  loadPricingContext, normalisePartNumber, priceForRow, rowPurchasePrice, roundMoney,
+  loadPricingContext, normalisePartNumber, priceForRow, rowPurchasePrice, roundMoney, sellableQuantity,
 } from '@/lib/catalog';
 import { matchByInterchange, matchByNormalisedPartNumber, productsForBulk } from '@/lib/products';
 
@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
         // A spreadsheet of fifty numbers is exactly where adding more than
         // exists would go unnoticed, so the figure travels with the row.
         // Null means nobody counted the part, which sells nothing.
-        available: product.available ?? 0,
+        available: sellableQuantity(product.available),
       },
     };
   });

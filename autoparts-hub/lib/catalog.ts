@@ -1,5 +1,5 @@
 import 'server-only';
-import { prisma } from '@/lib/db';
+import { sql, one } from '@/lib/sql';
 import { getSession } from '@/lib/auth';
 import {
   resolvePrice,
@@ -34,160 +34,97 @@ export async function loadPricingContext(): Promise<PricingContext> {
   // it could carry these safely, but a discount agreed this morning should
   // apply on the next request rather than whenever the cookie is next
   // reissued.
-  const client = session
-    ? await prisma.client.findUnique({
-        where: { id: session.userId },
-        select: { discountPercent: true, currency: true },
-      })
-    : null;
+  //
+  // One statement for all four: the tier, the account, the active rules and
+  // the currency to quote in. They are read together on every priced request
+  // in the application, and four round trips to answer one question is three
+  // too many.
+  const [account, rules] = await Promise.all([
+    one<{
+      discountPercent: number | null;
+      categoryId: string | null;
+      categoryName: string | null;
+      categoryMarkupPercent: number | null;
+      currencyCode: string | null;
+      currencySymbol: string | null;
+      currencyRate: number | null;
+    }>`
+      SELECT c."discountPercent",
+             cat."id" AS "categoryId", cat."name" AS "categoryName",
+             cat."markupPercent" AS "categoryMarkupPercent",
+             -- The account's currency where it has an active one, and the
+             -- base row otherwise, so a deactivated currency cannot leave
+             -- somebody quoted at a rate nobody is maintaining.
+             COALESCE(cur."code", base."code") AS "currencyCode",
+             COALESCE(cur."symbol", base."symbol") AS "currencySymbol",
+             COALESCE(cur."rate", base."rate") AS "currencyRate"
+      FROM (SELECT 1) AS anchor
+      -- Left joins throughout, and the anchor row underneath them, so an
+      -- anonymous visitor still gets the Retail tier and the base currency
+      -- back rather than no row at all.
+      LEFT JOIN "Client" c ON c."id" = ${session?.userId ?? null}
+      LEFT JOIN "ClientCategory" cat
+             ON cat."id" = ${session?.categoryId ?? null}
+             OR (${session?.categoryId ?? null}::text IS NULL AND cat."name" = 'Retail')
+      LEFT JOIN "Currency" cur ON cur."id" = c."currencyId" AND cur."active"
+      LEFT JOIN "Currency" base ON base."isBase"
+      LIMIT 1
+    `,
+    sql<MarkupRule>`
+      -- Ordered, because the engine sorts by specificity then priority and
+      -- leaves a tie to input order. Heap order settled that before, which is
+      -- to say nothing settled it. By id, the rules are ranked the same way
+      -- twice running.
+      SELECT * FROM "MarkupRule" WHERE "active" ORDER BY "id" ASC
+    `,
+  ]);
 
-  const category = session?.categoryId
-    ? await prisma.clientCategory.findUnique({ where: { id: session.categoryId } })
-    : await prisma.clientCategory.findFirst({ where: { name: 'Retail' } });
-
-  const rules = await prisma.markupRule.findMany({ where: { active: true } });
-
-  // Falls back to the base row so a deactivated currency cannot leave an
-  // account quoted at a rate nobody is maintaining.
   const currency =
-    client?.currency && client.currency.active
+    account?.currencyCode && account.currencySymbol !== null && account.currencyRate !== null
       ? {
-          code: client.currency.code,
-          symbol: client.currency.symbol,
-          rate: client.currency.rate,
+          code: account.currencyCode,
+          symbol: account.currencySymbol,
+          rate: account.currencyRate,
         }
-      : await loadBaseCurrency();
+      : null;
 
   return {
-    category: category
-      ? { id: category.id, name: category.name, markupPercent: category.markupPercent }
-      : null,
-    rules: rules as unknown as MarkupRule[],
-    tierName: category?.name ?? 'Retail',
+    category:
+      account?.categoryId && account.categoryMarkupPercent !== null
+        ? {
+            id: account.categoryId,
+            name: account.categoryName ?? 'Retail',
+            markupPercent: account.categoryMarkupPercent,
+          }
+        : null,
+    rules,
+    tierName: account?.categoryName ?? 'Retail',
     isLoggedIn: !!session,
-    discountPercent: client?.discountPercent ?? 0,
+    discountPercent: account?.discountPercent ?? 0,
     currency,
   };
 }
 
-async function loadBaseCurrency(): Promise<PricingCurrency | null> {
-  const base = await prisma.currency.findFirst({ where: { isBase: true } });
-  return base ? { code: base.code, symbol: base.symbol, rate: base.rate } : null;
-}
-
 /**
- * What every query that prices a product must load.
+ * How many of a part may actually be sold.
  *
- * The active price list's line for the part comes down with the part itself,
- * as a filtered join, rather than the whole list being loaded into memory
- * once per request — a supplier list runs to tens of thousands of rows and a
- * search touches twenty of them.
+ * The queries return `null` for a part nobody has counted into a warehouse
+ * that can be picked from — untracked, which is not the same as none left,
+ * and `SUM` over no rows says so by itself. An admin needs to tell an unfilled
+ * record from an empty shelf, so the two stay distinct all the way out of the
+ * database and into the catalogue's own responses.
  *
- * Spread into the `include` of any query whose rows are handed to `priceFor`.
- * Kept here, and only here, because "what does it take to price a product" is
- * one fact, and six routes each answering it separately is six chances for one
- * of them to quietly price from the wrong number.
+ * Nothing a customer can do turns on which it is, though: stock is the
+ * authority, and a part nobody has counted has none to sell. That collapse
+ * happens here and nowhere else, so changing the policy back to selling
+ * uncounted parts on their lead time is changing this function.
+ *
+ * It used to sum a list of shelves loaded per part. The shelves are summed in
+ * the database now, and what is left is the decision itself.
  */
-export const PRICED_PRODUCT_INCLUDE = {
-  manufacturer: true,
-  vehicleSystem: true,
-  // At most one list is active — the database enforces it — so this is at
-  // most one row, and `take` says so rather than leaving it implied.
-  priceListItems: {
-    where: { priceList: { active: true } },
-    select: { price: true },
-    take: 1,
-  },
-} as const;
-
-/**
- * The least a row needs for its purchase price to be resolved.
- *
- * Narrower than `PriceableProduct` on purpose: working out what a part cost to
- * buy needs the price and the active list's line, and nothing about the brand
- * or the system it belongs to. Callers that only want the cost — the admin's
- * basket values, for one — should not have to load a manufacturer to get it.
- */
-export interface PurchasePriced {
-  basePrice: number;
-  /** The active list's line, when one covers this part. See the include above. */
-  priceListItems?: { price: number }[];
+export function sellableQuantity(available: number | null): number {
+  return available ?? 0;
 }
-
-interface PriceableProduct extends PurchasePriced {
-  partNumber: string;
-  supplierId?: string | null;
-  manufacturer: { name: string };
-  vehicleSystem: { slug: string };
-}
-
-/**
- * What the part costs to buy.
- *
- * The active price list wins where it mentions the part; otherwise the part's
- * own `basePrice` stands. A list that covers half the catalogue therefore
- * reprices half of it and leaves the rest exactly as it was, which is what
- * makes uploading one safe — reading a missing line as zero would put every
- * part the supplier did not quote on sale for nothing.
- */
-export function purchasePriceOf(product: PurchasePriced): number {
-  return product.priceListItems?.[0]?.price ?? product.basePrice;
-}
-
-/**
- * What a catalogue query must load to say whether a part is available.
- *
- * Restricted to active warehouses, which is the same restriction
- * `reserveStock` applies when an order actually draws stock down. The two have
- * to agree: a page that says "out of stock" while checkout sells the part, or
- * the reverse, is worse than either page alone.
- */
-export const STOCK_INCLUDE = {
-  stock: {
-    where: { warehouse: { active: true } },
-    select: { quantity: true, reserved: true },
-  },
-} as const;
-
-export interface StockCounted {
-  stock?: { quantity: number; reserved: number }[];
-}
-
-/**
- * How many can be sold, or null where that is not a question with an answer.
- *
- * Null means nobody has counted this part into a warehouse that can be picked
- * from — untracked, which is not the same as none left. The catalogue sold on
- * `Product.stockDays` alone before warehouses existed and still does for every
- * part nobody has counted, so the honest thing to show is the lead time and no
- * claim about stock at all. Zero means someone did count, and there are none.
- *
- * `quantity - reserved` rather than `quantity`, because what is promised to an
- * order that has not shipped is not available to sell twice.
- */
-export function availabilityOf(product: StockCounted): number | null {
-  if (!product.stock || product.stock.length === 0) return null;
-
-  return product.stock.reduce((sum, s) => sum + (s.quantity - s.reserved), 0);
-}
-
-/**
- * How many may actually be sold.
- *
- * Stock is the authority: a part nobody has counted has none to sell, and
- * `null` and `0` come to the same answer here even though they remain
- * different facts. `availabilityOf` keeps them apart because the two have
- * different causes — one is an unfilled record, the other an empty shelf —
- * and an admin looking at the catalogue needs to tell them apart. Nothing a
- * customer can do depends on which it is.
- *
- * This is the only place that decision is made, so changing the policy back
- * to selling uncounted parts on their lead time is changing this function.
- */
-export function sellableQuantity(product: StockCounted): number {
-  return availabilityOf(product) ?? 0;
-}
-
 /**
  * A part as SQL returns it: flat, because that is what a row is.
  *
@@ -236,27 +173,6 @@ export function priceForRow(row: PriceableRow, ctx: PricingContext): PriceResult
   );
 }
 
-/**
- * Prices a part in the shape Prisma returns it.
- *
- * A bridge while the routes are moved onto SQL one at a time: it flattens and
- * calls `priceForRow`, so both halves of a half-migrated API price identically
- * rather than by two copies of the same rules. It goes when the last Prisma
- * route does.
- */
-export function priceFor(product: PriceableProduct, ctx: PricingContext): PriceResult | null {
-  return priceForRow(
-    {
-      basePrice: product.basePrice,
-      partNumber: product.partNumber,
-      supplierId: product.supplierId ?? null,
-      manufacturerName: product.manufacturer.name,
-      systemSlug: product.vehicleSystem.slug,
-      listPrice: product.priceListItems?.[0]?.price ?? null,
-    },
-    ctx
-  );
-}
 
 /** Free-text catalog search. `mode: 'insensitive'` is required on Postgres,
  *  where `contains` is a case-sensitive LIKE. */
@@ -306,7 +222,7 @@ export async function idsMatchingNormalisedPartNumber(q: string): Promise<string
   const needle = normalisePartNumber(q);
   if (needle.length < 3) return [];
 
-  const rows = await prisma.$queryRaw<Array<{ id: string }>>`
+  const rows = await sql<{ id: string }>`
     SELECT DISTINCT p."id"
     FROM "Product" p
     LEFT JOIN "Interchange" i ON i."sourceId" = p."id"
@@ -334,7 +250,7 @@ export async function idsByFuzzyMatch(q: string): Promise<string[]> {
   const needle = q.trim().toLowerCase();
   if (needle.length < 3) return [];
 
-  const rows = await prisma.$queryRaw<Array<{ id: string }>>`
+  const rows = await sql<{ id: string }>`
     SELECT p."id",
            GREATEST(
              word_similarity(${needle}, lower(p."name")),

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import { loadPricingContext, priceForRow, rowPurchasePrice } from '@/lib/catalog';
+import { loadPricingContext, priceForRow, rowPurchasePrice, sellableQuantity } from '@/lib/catalog';
 import { basketFor, knownProductIds, replaceBasket, type Basket } from '@/lib/cart';
 
 /**
@@ -37,7 +37,7 @@ async function serialise(basket: Basket) {
       // on stock that has since been sold.
       // Null means nobody counted the part, which sells nothing — the same
       // collapse sellableQuantity makes, on a figure the query already summed.
-      available: line.available ?? 0,
+      available: sellableQuantity(line.available),
     })),
   };
 }
