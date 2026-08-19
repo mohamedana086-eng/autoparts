@@ -51,19 +51,3 @@ export function readCurrencyInput(
   };
 }
 
-export function serialiseCurrency(c: {
-  id: string; code: string; name: string; symbol: string;
-  rate: number; isBase: boolean; active: boolean;
-  _count?: { clients: number };
-}) {
-  return {
-    id: c.id,
-    code: c.code,
-    name: c.name,
-    symbol: c.symbol,
-    rate: c.rate,
-    isBase: c.isBase,
-    active: c.active,
-    clientCount: c._count?.clients ?? 0,
-  };
-}

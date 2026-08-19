@@ -1,57 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
 import { requireAdmin } from '@/lib/admin-guard';
+import { adminMarkupRules, createMarkupRule, markupRuleOptions } from '@/lib/pricing-admin';
 
 const TYPES = ['PERCENT', 'AMOUNT', 'FIXED'];
-
-function serialise(rule: {
-  id: string; label: string; priority: number;
-  clientCategoryId: string | null; supplierId: string | null;
-  manufacturerName: string | null; vehicleSystemSlug: string | null;
-  partNumberPrefix: string | null; purchasePriceFrom: number | null;
-  purchasePriceTo: number | null; type: string; value: number; active: boolean;
-  clientCategory?: { name: string } | null; supplier?: { name: string } | null;
-}) {
-  return {
-    id: rule.id,
-    label: rule.label,
-    priority: rule.priority,
-    clientCategoryId: rule.clientCategoryId,
-    clientCategoryName: rule.clientCategory?.name ?? null,
-    supplierId: rule.supplierId,
-    supplierName: rule.supplier?.name ?? null,
-    manufacturerName: rule.manufacturerName,
-    vehicleSystemSlug: rule.vehicleSystemSlug,
-    partNumberPrefix: rule.partNumberPrefix,
-    purchasePriceFrom: rule.purchasePriceFrom,
-    purchasePriceTo: rule.purchasePriceTo,
-    type: rule.type,
-    value: rule.value,
-    active: rule.active,
-  };
-}
 
 // GET /api/admin/markup-rules — rules plus everything the builder's selects need.
 export async function GET() {
   const denied = await requireAdmin();
   if (denied) return denied;
 
-  const [rules, categories, suppliers, systems] = await Promise.all([
-    prisma.markupRule.findMany({
-      include: { clientCategory: true, supplier: true },
-      orderBy: { priority: 'desc' },
-    }),
-    prisma.clientCategory.findMany({ orderBy: { markupPercent: 'asc' } }),
-    prisma.supplier.findMany(),
-    prisma.vehicleSystem.findMany({ orderBy: { order: 'asc' } }),
-  ]);
+  const [rules, options] = await Promise.all([adminMarkupRules(), markupRuleOptions()]);
 
-  return NextResponse.json({
-    rules: rules.map(serialise),
-    categories: categories.map((c) => ({ id: c.id, name: c.name })),
-    suppliers: suppliers.map((s) => ({ id: s.id, name: s.name })),
-    systems: systems.map((s) => ({ slug: s.slug, name: s.name })),
-  });
+  return NextResponse.json({ rules, ...options });
 }
 
 // POST /api/admin/markup-rules
@@ -95,22 +55,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Price band starts above where it ends.' }, { status: 400 });
   }
 
-  const rule = await prisma.markupRule.create({
-    data: {
-      label,
-      priority: optNum(body.priority) ?? 0,
-      clientCategoryId: optText(body.clientCategoryId),
-      supplierId: optText(body.supplierId),
-      manufacturerName: optText(body.manufacturerName),
-      vehicleSystemSlug: optText(body.vehicleSystemSlug),
-      partNumberPrefix: optText(body.partNumberPrefix),
-      purchasePriceFrom: from,
-      purchasePriceTo: to,
-      type,
-      value,
-    },
-    include: { clientCategory: true, supplier: true },
+  const rule = await createMarkupRule({
+    label,
+    priority: optNum(body.priority) ?? 0,
+    clientCategoryId: optText(body.clientCategoryId),
+    supplierId: optText(body.supplierId),
+    manufacturerName: optText(body.manufacturerName),
+    vehicleSystemSlug: optText(body.vehicleSystemSlug),
+    partNumberPrefix: optText(body.partNumberPrefix),
+    purchasePriceFrom: from,
+    purchasePriceTo: to,
+    type,
+    value,
   });
 
-  return NextResponse.json({ rule: serialise(rule) }, { status: 201 });
+  return NextResponse.json({ rule }, { status: 201 });
 }
