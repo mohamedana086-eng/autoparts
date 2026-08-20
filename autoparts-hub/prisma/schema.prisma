@@ -1,5 +1,24 @@
-// Prisma schema for AutoParts Hub
-// Local setup: npx prisma migrate dev   then   npm run db:seed
+// The data model, as documentation. NOTHING GENERATES FROM THIS FILE.
+// ---------------------------------------------------------------------------
+// Prisma is no longer a dependency of this project. The application reads
+// through lib/sql.ts, the migrations in ./migrations are the source of truth
+// for what the database actually looks like, and prisma/migrate.ts applies
+// them. This file is kept because it is the most readable description of the
+// model anywhere in the repo, and because its comments explain why several
+// columns are shaped the way they are.
+//
+// Which means it can drift, and nothing will tell you. When you change the
+// schema, write the migration SQL by hand and update this file to match. To
+// author a migration from a change made here instead, Prisma can still be run
+// without being installed:
+//
+//   npx prisma@5 migrate diff \
+//     --from-migrations ./prisma/migrations --to-schema-datamodel ./prisma/schema.prisma \
+//     --shadow-database-url "$SHADOW_DATABASE_URL" --script
+//
+// The directory keeps its name on purpose: prisma/migrate.ts adopts the
+// _prisma_migrations ledger Prisma wrote, and renaming around it risks a
+// migration being applied twice.
 
 datasource db {
   provider = "postgresql"

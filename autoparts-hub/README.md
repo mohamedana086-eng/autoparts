@@ -80,7 +80,13 @@ Actions were relying on a layout redirect that does not gate them.
 - **Data model** — `prisma/schema.prisma`: vehicle systems, manufacturers,
   suppliers, products, interchanges, client categories, clients (with
   auth fields + role), markup rules, orders, warehouses, stock levels,
-  retail outlets, saved baskets, notifications.
+  retail outlets, saved baskets, notifications. Documentation only —
+  `prisma/migrations` is what the database is actually built from, and
+  nothing generates from the schema file. See its header.
+- **Database access** — `lib/sql.ts`. Every query in the application is raw
+  SQL through a tagged template, which binds its parameters; no query text is
+  assembled from strings anywhere. Queries live in `lib/` modules, not in
+  route handlers. There is no ORM.
 
 ## Getting started
 
@@ -90,8 +96,7 @@ the same hosted database the deployment uses.
 ```bash
 npm install
 cp .env.example .env   # then set DATABASE_URL and AUTH_SECRET
-npx prisma generate    # npm blocks install scripts, so run this explicitly
-npm run db:migrate     # applies prisma/migrations to the database
+npm run db:deploy      # applies prisma/migrations to the database
 npm run db:seed        # sample catalog, client categories, rules, accounts
 npm run db:stock       # counts the catalogue in — see below
 npm run dev

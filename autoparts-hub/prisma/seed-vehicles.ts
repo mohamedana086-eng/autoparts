@@ -11,9 +11,9 @@
  * FITS below) rather than taken from a fitment database — swap this for a
  * TecDoc/TecAlliance linkage import before anyone relies on it to order.
  */
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { loadEnv } from './env';
+import { sql, one } from '@/lib/sql';
+import { newId } from '@/lib/id';
 
 interface VariantSeed {
   name: string;
@@ -193,72 +193,73 @@ const CAR_MAKERS = new Set(['BMW', 'NISSAN', 'TOYOTA', 'HYUNDAI', 'VOLKSWAGEN', 
 
 async function main() {
   // ---- makes, models, variants ----
+  // Each level upserts on its unique key and returns the id the next level
+  // hangs off, so a re-run updates in place rather than duplicating.
   for (const make of MAKES) {
-    const makeRow = await prisma.vehicleMake.upsert({
-      where: { name: make.name },
-      update: { wmiCodes: make.wmiCodes },
-      create: { name: make.name, wmiCodes: make.wmiCodes },
-    });
+    const makeRow = await one<{ id: string }>`
+      INSERT INTO "VehicleMake" ("id", "name", "wmiCodes")
+      VALUES (${newId()}, ${make.name}, ${make.wmiCodes}::text[])
+      ON CONFLICT ("name") DO UPDATE SET "wmiCodes" = EXCLUDED."wmiCodes"
+      RETURNING "id"
+    `;
 
     for (const model of make.models) {
-      const modelRow = await prisma.vehicleModel.upsert({
-        where: { makeId_name: { makeId: makeRow.id, name: model.name } },
-        update: { yearFrom: model.yearFrom, yearTo: model.yearTo ?? null },
-        create: {
-          makeId: makeRow.id,
-          name: model.name,
-          yearFrom: model.yearFrom,
-          yearTo: model.yearTo ?? null,
-        },
-      });
+      const modelRow = await one<{ id: string }>`
+        INSERT INTO "VehicleModel" ("id", "makeId", "name", "yearFrom", "yearTo")
+        VALUES (${newId()}, ${makeRow!.id}, ${model.name}, ${model.yearFrom},
+                ${model.yearTo ?? null})
+        ON CONFLICT ("makeId", "name") DO UPDATE
+          SET "yearFrom" = EXCLUDED."yearFrom", "yearTo" = EXCLUDED."yearTo"
+        RETURNING "id"
+      `;
 
       for (const variant of model.variants) {
-        await prisma.vehicleVariant.upsert({
-          where: { modelId_name: { modelId: modelRow.id, name: variant.name } },
-          update: {
-            engineCode: variant.engineCode ?? null,
-            powerKw: variant.powerKw ?? null,
-            fuel: variant.fuel,
-            yearFrom: variant.yearFrom,
-            yearTo: variant.yearTo ?? null,
-          },
-          create: {
-            modelId: modelRow.id,
-            name: variant.name,
-            engineCode: variant.engineCode ?? null,
-            powerKw: variant.powerKw ?? null,
-            fuel: variant.fuel,
-            yearFrom: variant.yearFrom,
-            yearTo: variant.yearTo ?? null,
-          },
-        });
+        await sql`
+          INSERT INTO "VehicleVariant" ("id", "modelId", "name", "engineCode", "powerKw",
+                                        "fuel", "yearFrom", "yearTo")
+          VALUES (${newId()}, ${modelRow!.id}, ${variant.name}, ${variant.engineCode ?? null},
+                  ${variant.powerKw ?? null}, ${variant.fuel}, ${variant.yearFrom},
+                  ${variant.yearTo ?? null})
+          ON CONFLICT ("modelId", "name") DO UPDATE
+            SET "engineCode" = EXCLUDED."engineCode",
+                "powerKw" = EXCLUDED."powerKw",
+                "fuel" = EXCLUDED."fuel",
+                "yearFrom" = EXCLUDED."yearFrom",
+                "yearTo" = EXCLUDED."yearTo"
+        `;
       }
     }
   }
 
   // ---- fitment ----
-  const variants = await prisma.vehicleVariant.findMany({
-    include: { model: { include: { make: true } } },
-  });
-  const products = await prisma.product.findMany({
-    include: { manufacturer: true, vehicleSystem: true },
-  });
+  // Flat rows with the make name and system slug joined in, because that is
+  // all the rules below read. The ORM returned a make nested two levels inside
+  // each variant, which had to be walked once per product per rule.
+  const variants = await sql<{ id: string; makeName: string; fuel: string }>`
+    SELECT v."id", mk."name" AS "makeName", v."fuel"
+    FROM "VehicleVariant" v
+    JOIN "VehicleModel" md ON md."id" = v."modelId"
+    JOIN "VehicleMake" mk ON mk."id" = md."makeId"
+  `;
+  const products = await sql<{ id: string; brand: string; systemSlug: string }>`
+    SELECT p."id", m."name" AS "brand", vs."slug" AS "systemSlug"
+    FROM "Product" p
+    JOIN "Manufacturer" m ON m."id" = p."manufacturerId"
+    JOIN "VehicleSystem" vs ON vs."id" = p."vehicleSystemId"
+  `;
 
   const pairs: Array<{ productId: string; variantId: string; note: string | null }> = [];
 
   for (const product of products) {
-    const brand = product.manufacturer.name;
-    const ownBrandOf = CAR_MAKERS.has(brand) ? brand : null;
+    const ownBrandOf = CAR_MAKERS.has(product.brand) ? product.brand : null;
 
     for (const rule of FITS) {
-      if (!rule.systems.includes(product.vehicleSystem.slug)) continue;
+      if (!rule.systems.includes(product.systemSlug)) continue;
 
       for (const variant of variants) {
-        const makeName = variant.model.make.name;
-
         // A vehicle maker's own part only goes on its own vehicles.
-        if (ownBrandOf && ownBrandOf !== makeName) continue;
-        if (rule.makes && !rule.makes.includes(makeName)) continue;
+        if (ownBrandOf && ownBrandOf !== variant.makeName) continue;
+        if (rule.makes && !rule.makes.includes(variant.makeName)) continue;
         if (rule.fuels && !rule.fuels.includes(variant.fuel)) continue;
 
         pairs.push({ productId: product.id, variantId: variant.id, note: rule.note ?? null });
@@ -266,21 +267,48 @@ async function main() {
     }
   }
 
-  // createMany + skipDuplicates so re-runs add only what is missing.
-  const result = await prisma.fitment.createMany({ data: pairs, skipDuplicates: true });
+  // ON CONFLICT DO NOTHING so a re-run adds only what is missing, and
+  // RETURNING so it can say how many that was. Thousands of pairs go in a few
+  // statements rather than a few thousand.
+  const CHUNK = 5000;
+  let added = 0;
+  for (let at = 0; at < pairs.length; at += CHUNK) {
+    const chunk = pairs.slice(at, at + CHUNK);
+    const inserted = await sql<{ id: string }>`
+      INSERT INTO "Fitment" ("id", "productId", "variantId", "note")
+      SELECT * FROM unnest(
+        ${chunk.map(() => newId())}::text[],
+        ${chunk.map((p) => p.productId)}::text[],
+        ${chunk.map((p) => p.variantId)}::text[],
+        ${chunk.map((p) => p.note)}::text[]
+      )
+      ON CONFLICT ("productId", "variantId") DO NOTHING
+      RETURNING "id"
+    `;
+    added += inserted.length;
+  }
+
+  const counts = await one<{
+    makes: number; models: number; variants: number; fitments: number;
+  }>`
+    SELECT (SELECT COUNT(*) FROM "VehicleMake")::int AS "makes",
+           (SELECT COUNT(*) FROM "VehicleModel")::int AS "models",
+           (SELECT COUNT(*) FROM "VehicleVariant")::int AS "variants",
+           (SELECT COUNT(*) FROM "Fitment")::int AS "fitments"
+  `;
 
   console.log(
-    `makes ${await prisma.vehicleMake.count()}, models ${await prisma.vehicleModel.count()}, ` +
-      `variants ${await prisma.vehicleVariant.count()}`
+    `makes ${counts?.makes ?? 0}, models ${counts?.models ?? 0}, ` +
+      `variants ${counts?.variants ?? 0}`
   );
-  console.log(`fitment rows: ${result.count} added, ${await prisma.fitment.count()} total`);
+  console.log(`fitment rows: ${added} added, ${counts?.fitments ?? 0} total`);
 }
 
-main()
-  .catch((e) => {
+loadEnv();
+main().then(
+  () => process.exit(0),
+  (e) => {
     console.error(e);
     process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+  }
+);
