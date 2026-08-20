@@ -24,9 +24,9 @@
  * every such raise is printed — those units were committed to a customer, and
  * the alternative is an order nobody can ever ship.
  */
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { loadEnv } from './env';
+import { sql } from '@/lib/sql';
+import { newId } from '@/lib/id';
 
 /** Statuses where the goods have left, so the allocation no longer holds stock. */
 const GONE = ['shipped', 'paid'];
@@ -42,76 +42,47 @@ interface Drift {
   owed: number;
 }
 
+/**
+ * Every (part, warehouse) where the shelf and the orders disagree.
+ *
+ * A full outer join, because the disagreement runs both ways: an order can
+ * hold units at a site with no shelf at all, and a shelf can reserve units no
+ * live order is holding. Either side may be the one that is missing, so
+ * neither can be the one driving the join.
+ *
+ * This used to be four queries and two maps built in memory — allocations
+ * grouped, order items looked up to reach their product, warehouses fetched
+ * for their codes, and then one shelf read per candidate. It is the question
+ * asked once now.
+ */
 async function survey(): Promise<Drift[]> {
-  // Every (part, warehouse) an order currently holds, and how much.
-  const held = await prisma.orderItemAllocation.groupBy({
-    by: ['warehouseId', 'orderItemId'],
-    where: { orderItem: { order: { status: { notIn: GONE } } } },
-    _sum: { quantity: true },
-  });
-
-  // groupBy cannot reach through orderItem to productId, so map it here.
-  const items = await prisma.orderItem.findMany({
-    where: { id: { in: held.map((h) => h.orderItemId) } },
-    select: { id: true, productId: true, product: { select: { partNumber: true } } },
-  });
-  const itemById = new Map(items.map((i) => [i.id, i]));
-
-  const owedBy = new Map<string, { productId: string; partNumber: string; warehouseId: string; owed: number }>();
-  for (const row of held) {
-    const item = itemById.get(row.orderItemId);
-    if (!item) continue;
-    const key = `${item.productId}:${row.warehouseId}`;
-    const previous = owedBy.get(key);
-    const owed = (previous?.owed ?? 0) + (row._sum.quantity ?? 0);
-    owedBy.set(key, {
-      productId: item.productId,
-      partNumber: item.product.partNumber,
-      warehouseId: row.warehouseId,
-      owed,
-    });
-  }
-
-  const warehouses = new Map(
-    (await prisma.warehouse.findMany({ select: { id: true, code: true } })).map((w) => [w.id, w.code])
-  );
-
-  const drifts: Drift[] = [];
-
-  for (const entry of owedBy.values()) {
-    const shelf = await prisma.stockLevel.findUnique({
-      where: { productId_warehouseId: { productId: entry.productId, warehouseId: entry.warehouseId } },
-    });
-    if (shelf?.reserved === entry.owed) continue;
-
-    drifts.push({
-      ...entry,
-      warehouseCode: warehouses.get(entry.warehouseId) ?? entry.warehouseId,
-      storedReserved: shelf?.reserved ?? null,
-      quantity: shelf?.quantity ?? null,
-    });
-  }
-
-  // The other direction: a shelf reserving units no live order is holding.
-  const shelves = await prisma.stockLevel.findMany({
-    where: { reserved: { gt: 0 } },
-    include: { product: { select: { partNumber: true } }, warehouse: { select: { code: true } } },
-  });
-  for (const shelf of shelves) {
-    const key = `${shelf.productId}:${shelf.warehouseId}`;
-    if (owedBy.has(key)) continue; // already covered above
-    drifts.push({
-      productId: shelf.productId,
-      partNumber: shelf.product.partNumber,
-      warehouseId: shelf.warehouseId,
-      warehouseCode: shelf.warehouse.code,
-      storedReserved: shelf.reserved,
-      quantity: shelf.quantity,
-      owed: 0,
-    });
-  }
-
-  return drifts;
+  return sql<Drift>`
+    WITH held AS (
+      SELECT oi."productId", a."warehouseId", SUM(a."quantity")::int AS "owed"
+      FROM "OrderItemAllocation" a
+      JOIN "OrderItem" oi ON oi."id" = a."orderItemId"
+      JOIN "Order" o ON o."id" = oi."orderId"
+      WHERE o."status" <> ALL(${GONE}::text[])
+      GROUP BY oi."productId", a."warehouseId"
+    )
+    SELECT COALESCE(h."productId", s."productId") AS "productId",
+           p."partNumber",
+           COALESCE(h."warehouseId", s."warehouseId") AS "warehouseId",
+           w."code" AS "warehouseCode",
+           s."reserved" AS "storedReserved",
+           s."quantity",
+           COALESCE(h."owed", 0) AS "owed"
+    FROM held h
+    FULL OUTER JOIN "StockLevel" s
+      ON s."productId" = h."productId" AND s."warehouseId" = h."warehouseId"
+    JOIN "Product" p ON p."id" = COALESCE(h."productId", s."productId")
+    JOIN "Warehouse" w ON w."id" = COALESCE(h."warehouseId", s."warehouseId")
+    -- -1 stands for "there is no shelf", which can never equal a real total
+    -- and so always counts as a disagreement. A shelf reserving nothing that
+    -- no order holds agrees, and drops out here.
+    WHERE COALESCE(s."reserved", -1) <> COALESCE(h."owed", 0)
+    ORDER BY p."partNumber" ASC, w."code" ASC
+  `;
 }
 
 async function main() {
@@ -148,16 +119,14 @@ async function main() {
       raised.push(`${d.partNumber} @ ${d.warehouseCode}: ${d.quantity} -> ${quantity}`);
     }
 
-    await prisma.stockLevel.upsert({
-      where: { productId_warehouseId: { productId: d.productId, warehouseId: d.warehouseId } },
-      create: {
-        productId: d.productId,
-        warehouseId: d.warehouseId,
-        quantity,
-        reserved: d.owed,
-      },
-      update: { quantity, reserved: d.owed },
-    });
+    await sql`
+      INSERT INTO "StockLevel" ("id", "productId", "warehouseId", "quantity", "reserved", "updatedAt")
+      VALUES (${newId()}, ${d.productId}, ${d.warehouseId}, ${quantity}, ${d.owed}, CURRENT_TIMESTAMP)
+      ON CONFLICT ("productId", "warehouseId")
+      DO UPDATE SET "quantity" = EXCLUDED."quantity",
+                    "reserved" = EXCLUDED."reserved",
+                    "updatedAt" = CURRENT_TIMESTAMP
+    `;
 
     console.log(`  ${d.partNumber.padEnd(18)} @ ${d.warehouseCode.padEnd(5)} reserved -> ${d.owed}, quantity -> ${quantity}`);
   }
@@ -172,9 +141,11 @@ async function main() {
   console.log(`\n${left.length === 0 ? 'All shelves now agree.' : `${left.length} still disagree — look again.`}`);
 }
 
-main()
-  .catch((e) => {
+loadEnv();
+main().then(
+  () => process.exit(0),
+  (e) => {
     console.error(e);
     process.exit(1);
-  })
-  .finally(() => prisma.$disconnect());
+  }
+);

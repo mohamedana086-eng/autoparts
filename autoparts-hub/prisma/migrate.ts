@@ -21,41 +21,7 @@ import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { Pool } from '@neondatabase/serverless';
-
-/**
- * Reads .env the way the framework does for the app.
- *
- * This runs as a plain script, outside Next, so nothing has loaded it — and a
- * migration tool that only works when the operator remembered to export a
- * variable is one that eventually gets run against the wrong database.
- * Anything already in the environment wins, so CI can override the file.
- */
-function loadEnvFile(): void {
-  for (const name of ['.env.local', '.env']) {
-    const file = join(process.cwd(), name);
-    if (!existsSync(file)) continue;
-
-    for (const raw of readFileSync(file, 'utf8').split(/\r?\n/)) {
-      const line = raw.trim();
-      if (!line || line.startsWith('#')) continue;
-
-      const eq = line.indexOf('=');
-      if (eq < 1) continue;
-
-      const key = line.slice(0, eq).trim();
-      if (process.env[key] !== undefined) continue;
-
-      let value = line.slice(eq + 1).trim();
-      const quoted =
-        value.length > 1 &&
-        value[0] === value[value.length - 1] &&
-        (value[0] === '"' || value[0] === "'");
-      if (quoted) value = value.slice(1, -1);
-
-      process.env[key] = value;
-    }
-  }
-}
+import { loadEnv } from './env';
 
 const DIR = join(process.cwd(), 'prisma', 'migrations');
 
@@ -83,7 +49,7 @@ function pending(applied: Set<string>): Migration[] {
 }
 
 async function main() {
-  loadEnvFile();
+  loadEnv();
 
   // Migrations take a session-level advisory lock, and a pooler hands the
   // connection holding it to the next client — so they go direct where a
