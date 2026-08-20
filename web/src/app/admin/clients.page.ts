@@ -23,16 +23,16 @@ import type { AdminClient, ClientInput, TierRef } from '../core/admin.models';
       <div class="panel h-40 animate-pulse"></div>
     } @else {
       <div class="table-wrap">
-        <table class="w-full text-sm min-w-[1060px]">
+        <table class="w-full text-sm sm:min-w-[1060px]">
           <thead>
             <tr class="table-head">
               <th class="px-4 py-3 font-medium">Name</th>
               <th class="px-4 py-3 font-medium">Email</th>
-              <th class="px-4 py-3 font-medium">Login</th>
+              <th class="col-wide px-4 py-3 font-medium">Login</th>
               <th class="px-4 py-3 font-medium">Role &amp; pricing tier</th>
-              <th class="px-4 py-3 font-medium">Discount</th>
-              <th class="px-4 py-3 font-medium">Currency</th>
-              <th class="px-4 py-3 font-medium">Sales manager</th>
+              <th class="col-wide px-4 py-3 font-medium">Discount</th>
+              <th class="col-wide px-4 py-3 font-medium">Currency</th>
+              <th class="col-wide px-4 py-3 font-medium">Sales manager</th>
               <th class="px-4 py-3"></th>
             </tr>
           </thead>
@@ -41,7 +41,7 @@ import type { AdminClient, ClientInput, TierRef } from '../core/admin.models';
               <tr class="table-row">
                 <td class="px-4 py-3 font-medium">{{ c.name }}</td>
                 <td class="px-4 py-3 text-mute font-mono text-xs">{{ c.email }}</td>
-                <td class="px-4 py-3">
+                <td class="col-wide px-4 py-3">
                   <span class="text-[10px] font-mono uppercase px-2 py-1 rounded-plate border"
                         [class]="c.hasLogin ? 'border-stock text-stock' : 'border-ink-line text-mute'">
                     {{ c.hasLogin ? 'enabled' : 'no login' }}
@@ -67,7 +67,7 @@ import type { AdminClient, ClientInput, TierRef } from '../core/admin.models';
                   </div>
                 </td>
 
-                <td class="px-4 py-3">
+                <td class="col-wide px-4 py-3">
                   <div class="flex items-baseline gap-1">
                     <input type="number" min="0" max="100" step="0.5"
                            [value]="c.discountPercent"
@@ -78,7 +78,7 @@ import type { AdminClient, ClientInput, TierRef } from '../core/admin.models';
                   </div>
                 </td>
 
-                <td class="px-4 py-3">
+                <td class="col-wide px-4 py-3">
                   <select [value]="c.currencyId ?? ''" (change)="setCurrency(c.id, $any($event.target).value)"
                           [attr.aria-label]="'Currency for ' + c.name"
                           class="field-sm">
@@ -89,7 +89,7 @@ import type { AdminClient, ClientInput, TierRef } from '../core/admin.models';
                   </select>
                 </td>
 
-                <td class="px-4 py-3">
+                <td class="col-wide px-4 py-3">
                   <select [value]="c.salesManagerId ?? ''"
                           (change)="setSalesManager(c.id, $any($event.target).value)"
                           [attr.aria-label]="'Sales manager for ' + c.name"

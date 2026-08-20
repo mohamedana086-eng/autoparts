@@ -28,13 +28,13 @@ const STATUS_STYLE: Record<string, string> = {
       </div>
     } @else {
       <div class="table-wrap">
-        <table class="w-full text-sm min-w-[640px]">
+        <table class="w-full text-sm sm:min-w-[640px]">
           <thead>
             <tr class="table-head">
               <th class="px-4 py-3 font-medium">Reference</th>
               <th class="px-4 py-3 font-medium">Client</th>
-              <th class="px-4 py-3 font-medium">Placed</th>
-              <th class="px-4 py-3 font-medium">Ordered</th>
+              <th class="col-wide px-4 py-3 font-medium">Placed</th>
+              <th class="col-wide px-4 py-3 font-medium">Ordered</th>
               <th class="px-4 py-3 font-medium">Status</th>
               <th class="px-4 py-3 font-medium text-right">Total</th>
               <th class="px-4 py-3"></th>
@@ -45,8 +45,8 @@ const STATUS_STYLE: Record<string, string> = {
               <tr class="table-row">
                 <td class="px-4 py-3 font-mono text-xs">{{ o.reference }}</td>
                 <td class="px-4 py-3">{{ o.clientName }}</td>
-                <td class="px-4 py-3 text-mute text-xs font-mono">{{ o.createdAt.slice(0, 10) }}</td>
-                <td class="px-4 py-3">
+                <td class="col-wide px-4 py-3 text-mute text-xs font-mono">{{ o.createdAt.slice(0, 10) }}</td>
+                <td class="col-wide px-4 py-3">
                   <!-- The parts, not a bare unit count: four of one and one
                        each of four used to render the same here. -->
                   <span class="text-paper">{{ summary(o) }}</span>

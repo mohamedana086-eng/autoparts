@@ -20,13 +20,13 @@ import type { AdminCart } from '../core/admin.models';
       <div class="panel h-40 animate-pulse"></div>
     } @else {
       <div class="table-wrap">
-        <table class="w-full text-sm min-w-[760px]">
+        <table class="w-full text-sm sm:min-w-[760px]">
           <thead>
             <tr class="table-head">
               <th class="px-4 py-3 font-medium">Customer</th>
               <th class="px-4 py-3 font-medium">Last touched</th>
-              <th class="px-4 py-3 font-medium text-right">Lines</th>
-              <th class="px-4 py-3 font-medium text-right">Units</th>
+              <th class="col-wide px-4 py-3 font-medium text-right">Lines</th>
+              <th class="col-wide px-4 py-3 font-medium text-right">Units</th>
               <th class="px-4 py-3 font-medium text-right">Cost</th>
               <th class="px-4 py-3"></th>
             </tr>
@@ -39,8 +39,8 @@ import type { AdminCart } from '../core/admin.models';
                   <span class="block text-xs text-mute font-mono">{{ c.clientEmail }}</span>
                 </td>
                 <td class="px-4 py-3 text-mute text-xs font-mono">{{ c.updatedAt.slice(0, 10) }}</td>
-                <td class="px-4 py-3 text-right font-mono text-xs">{{ c.items.length }}</td>
-                <td class="px-4 py-3 text-right font-mono">{{ c.units }}</td>
+                <td class="col-wide px-4 py-3 text-right font-mono text-xs">{{ c.items.length }}</td>
+                <td class="col-wide px-4 py-3 text-right font-mono">{{ c.units }}</td>
                 <td class="px-4 py-3 text-right font-mono">€{{ c.cost.toFixed(2) }}</td>
                 <td class="px-4 py-3 text-right">
                   <button type="button" (click)="toggle(c.id)"

@@ -89,14 +89,14 @@ const BLANK: CurrencyInput = { code: '', name: '', symbol: '', rate: 1, active: 
       <div class="panel h-40 animate-pulse"></div>
     } @else {
       <div class="table-wrap">
-        <table class="w-full text-sm min-w-[680px]">
+        <table class="w-full text-sm sm:min-w-[680px]">
           <thead>
             <tr class="table-head">
               <th class="px-4 py-3 font-medium">Code</th>
-              <th class="px-4 py-3 font-medium">Name</th>
+              <th class="col-wide px-4 py-3 font-medium">Name</th>
               <th class="px-4 py-3 font-medium text-right">Rate</th>
               <th class="px-4 py-3 font-medium">Status</th>
-              <th class="px-4 py-3 font-medium text-right">Accounts</th>
+              <th class="col-wide px-4 py-3 font-medium text-right">Accounts</th>
               <th class="px-4 py-3"></th>
             </tr>
           </thead>
@@ -107,7 +107,7 @@ const BLANK: CurrencyInput = { code: '', name: '', symbol: '', rate: 1, active: 
                   <span class="font-mono font-medium">{{ c.code }}</span>
                   <span class="text-mute ml-1">{{ c.symbol }}</span>
                 </td>
-                <td class="px-4 py-3">
+                <td class="col-wide px-4 py-3">
                   {{ c.name }}
                   @if (c.isBase) {
                     <span class="ml-2 font-mono text-[10px] uppercase px-2 py-0.5 rounded-plate border border-signal text-signal">
@@ -122,7 +122,7 @@ const BLANK: CurrencyInput = { code: '', name: '', symbol: '', rate: 1, active: 
                     {{ c.active ? 'active' : 'off' }}
                   </span>
                 </td>
-                <td class="px-4 py-3 font-mono text-right">{{ c.clientCount }}</td>
+                <td class="col-wide px-4 py-3 font-mono text-right">{{ c.clientCount }}</td>
                 <td class="px-4 py-3 text-right whitespace-nowrap">
                   <button type="button" (click)="startEdit(c)"
                           class="btn-quiet text-xs uppercase font-mono mr-3">Edit</button>

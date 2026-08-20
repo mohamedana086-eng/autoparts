@@ -177,16 +177,16 @@ const BLANK: SupplierInput = {
       <div class="panel h-40 animate-pulse"></div>
     } @else {
       <div class="table-wrap">
-        <table class="w-full text-sm min-w-[1120px]">
+        <table class="w-full text-sm sm:min-w-[1120px]">
           <thead>
             <tr class="table-head">
               <th class="px-4 py-3 font-medium">Supplier</th>
               <th class="px-4 py-3 font-medium">Code</th>
-              <th class="px-4 py-3 font-medium">Type</th>
-              <th class="px-4 py-3 font-medium">Country</th>
-              <th class="px-4 py-3 font-medium text-right">Guar.</th>
-              <th class="px-4 py-3 font-medium text-right">Lead</th>
-              <th class="px-4 py-3 font-medium">Returns</th>
+              <th class="col-wide px-4 py-3 font-medium">Type</th>
+              <th class="col-wide px-4 py-3 font-medium">Country</th>
+              <th class="col-wide px-4 py-3 font-medium text-right">Guar.</th>
+              <th class="col-wide px-4 py-3 font-medium text-right">Lead</th>
+              <th class="col-wide px-4 py-3 font-medium">Returns</th>
               <th class="px-4 py-3 font-medium">Rating</th>
               <th class="px-4 py-3 font-medium">Parts</th>
               <th class="px-4 py-3"></th>
@@ -200,22 +200,22 @@ const BLANK: SupplierInput = {
                   <span class="block text-xs text-mute font-mono">/supplier/{{ s.slug }}</span>
                 </td>
                 <td class="px-4 py-3 font-mono text-xs">{{ s.code }}</td>
-                <td class="px-4 py-3">
+                <td class="col-wide px-4 py-3">
                   <app-supplier-badges [reliability]="s.reliability" [acceptsReturns]="null" />
                 </td>
-                <td class="px-4 py-3 text-xs">
+                <td class="col-wide px-4 py-3 text-xs">
                   {{ s.country ?? '—' }}
                   @if (s.purchaseCurrencyCode) {
                     <span class="block text-mute font-mono">{{ s.purchaseCurrencyCode }}</span>
                   }
                 </td>
-                <td class="px-4 py-3 font-mono text-xs text-right">
+                <td class="col-wide px-4 py-3 font-mono text-xs text-right">
                   {{ s.guaranteeMonths === null ? '—' : s.guaranteeMonths + 'm' }}
                 </td>
-                <td class="px-4 py-3 font-mono text-xs text-right">
+                <td class="col-wide px-4 py-3 font-mono text-xs text-right">
                   {{ s.defaultStockDays === null ? '—' : s.defaultStockDays + 'd' }}
                 </td>
-                <td class="px-4 py-3">
+                <td class="col-wide px-4 py-3">
                   <select [value]="returnsValue(s.acceptsReturns)"
                           (change)="setReturns(s, $any($event.target).value)"
                           [disabled]="returnsId() === s.id"
