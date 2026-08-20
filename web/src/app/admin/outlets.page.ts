@@ -101,14 +101,14 @@ const BLANK: OutletInput = {
       <div class="panel h-40 animate-pulse"></div>
     } @else {
       <div class="table-wrap">
-        <table class="w-full text-sm min-w-[860px]">
+        <table class="w-full text-sm sm:min-w-[860px]">
           <thead>
             <tr class="table-head">
               <th class="px-4 py-3 font-medium">Code</th>
               <th class="px-4 py-3 font-medium">Name</th>
-              <th class="px-4 py-3 font-medium">City</th>
-              <th class="px-4 py-3 font-medium">Phone</th>
-              <th class="px-4 py-3 font-medium">Supplied by</th>
+              <th class="col-wide px-4 py-3 font-medium">City</th>
+              <th class="col-wide px-4 py-3 font-medium">Phone</th>
+              <th class="col-wide px-4 py-3 font-medium">Supplied by</th>
               <th class="px-4 py-3 font-medium">Status</th>
               <th class="px-4 py-3"></th>
             </tr>
@@ -118,9 +118,9 @@ const BLANK: OutletInput = {
               <tr class="table-row">
                 <td class="px-4 py-3 font-mono text-xs">{{ o.code }}</td>
                 <td class="px-4 py-3">{{ o.name }}</td>
-                <td class="px-4 py-3 text-mute">{{ o.city || '—' }}</td>
-                <td class="px-4 py-3 font-mono text-xs text-mute">{{ o.phone || '—' }}</td>
-                <td class="px-4 py-3 text-xs">
+                <td class="col-wide px-4 py-3 text-mute">{{ o.city || '—' }}</td>
+                <td class="col-wide px-4 py-3 font-mono text-xs text-mute">{{ o.phone || '—' }}</td>
+                <td class="col-wide px-4 py-3 text-xs">
                   @if (o.warehouseCode) {
                     <span class="font-mono">{{ o.warehouseCode }}</span> {{ o.warehouseName }}
                   } @else {

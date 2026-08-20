@@ -92,16 +92,16 @@ const BLANK: WarehouseInput = {
       <div class="panel h-40 animate-pulse"></div>
     } @else {
       <div class="table-wrap">
-        <table class="w-full text-sm min-w-[860px]">
+        <table class="w-full text-sm sm:min-w-[860px]">
           <thead>
             <tr class="table-head">
               <th class="px-4 py-3 font-medium">Code</th>
               <th class="px-4 py-3 font-medium">Name</th>
-              <th class="px-4 py-3 font-medium">City</th>
-              <th class="px-4 py-3 font-medium text-right">Parts</th>
+              <th class="col-wide px-4 py-3 font-medium">City</th>
+              <th class="col-wide px-4 py-3 font-medium text-right">Parts</th>
               <th class="px-4 py-3 font-medium text-right">On hand</th>
-              <th class="px-4 py-3 font-medium text-right">Reserved</th>
-              <th class="px-4 py-3 font-medium text-right">Outlets</th>
+              <th class="col-wide px-4 py-3 font-medium text-right">Reserved</th>
+              <th class="col-wide px-4 py-3 font-medium text-right">Outlets</th>
               <th class="px-4 py-3 font-medium">Status</th>
               <th class="px-4 py-3"></th>
             </tr>
@@ -111,11 +111,11 @@ const BLANK: WarehouseInput = {
               <tr class="table-row">
                 <td class="px-4 py-3 font-mono text-xs">{{ w.code }}</td>
                 <td class="px-4 py-3">{{ w.name }}</td>
-                <td class="px-4 py-3 text-mute">{{ w.city || '—' }}</td>
-                <td class="px-4 py-3 text-right font-mono text-xs">{{ w.skuCount }}</td>
+                <td class="col-wide px-4 py-3 text-mute">{{ w.city || '—' }}</td>
+                <td class="col-wide px-4 py-3 text-right font-mono text-xs">{{ w.skuCount }}</td>
                 <td class="px-4 py-3 text-right font-mono">{{ w.totalQuantity }}</td>
-                <td class="px-4 py-3 text-right font-mono text-mute">{{ w.totalReserved }}</td>
-                <td class="px-4 py-3 text-right font-mono text-xs">{{ w.outletCount }}</td>
+                <td class="col-wide px-4 py-3 text-right font-mono text-mute">{{ w.totalReserved }}</td>
+                <td class="col-wide px-4 py-3 text-right font-mono text-xs">{{ w.outletCount }}</td>
                 <td class="px-4 py-3 text-xs">
                   @if (w.active) {
                     <span class="text-stock">Active</span>

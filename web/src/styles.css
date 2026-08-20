@@ -79,6 +79,21 @@
   .table-head {
     @apply bg-ink-panel text-mute text-xs uppercase tracking-wider text-left;
   }
+
+  /* A column a phone does without.
+   *
+   * Eleven columns do not fit in 375px under any styling — the products table
+   * is 1143px wide, so a phone was reading it through a window showing 29% of
+   * it. Hiding the supporting columns below sm leaves the identifier, the
+   * number the page is about, and the controls.
+   *
+   * Put it on the th and every matching td, or the columns below it shift by
+   * one. And pair it with sm:min-w-… on the table itself: a min-width set
+   * unconditionally keeps the table at its full size however many cells are
+   * hidden, which is the whole problem again. */
+  .col-wide {
+    @apply hidden sm:table-cell;
+  }
   .table-row {
     @apply border-t border-ink-line hover:bg-ink-panel/60;
   }

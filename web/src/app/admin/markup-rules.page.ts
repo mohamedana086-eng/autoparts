@@ -21,15 +21,15 @@ import type { MarkupRule, TierRef } from '../core/admin.models';
       <div class="panel h-40 animate-pulse mb-8"></div>
     } @else {
       <div class="table-wrap mb-8">
-        <table class="w-full text-sm min-w-[900px]">
+        <table class="w-full text-sm sm:min-w-[900px]">
           <thead>
             <tr class="table-head">
               <th class="px-4 py-3 font-medium">Label</th>
-              <th class="px-4 py-3 font-medium">Category</th>
-              <th class="px-4 py-3 font-medium">Supplier</th>
-              <th class="px-4 py-3 font-medium">Manufacturer</th>
-              <th class="px-4 py-3 font-medium">System</th>
-              <th class="px-4 py-3 font-medium">Price band</th>
+              <th class="col-wide px-4 py-3 font-medium">Category</th>
+              <th class="col-wide px-4 py-3 font-medium">Supplier</th>
+              <th class="col-wide px-4 py-3 font-medium">Manufacturer</th>
+              <th class="col-wide px-4 py-3 font-medium">System</th>
+              <th class="col-wide px-4 py-3 font-medium">Price band</th>
               <th class="px-4 py-3 font-medium">Adjustment</th>
               <th class="px-4 py-3 font-medium">Active</th>
               <th class="px-4 py-3"></th>
@@ -39,11 +39,11 @@ import type { MarkupRule, TierRef } from '../core/admin.models';
             @for (r of rules(); track r.id) {
               <tr class="table-row">
                 <td class="px-4 py-3 font-medium">{{ r.label }}</td>
-                <td class="px-4 py-3 text-mute">{{ r.clientCategoryName ?? 'any' }}</td>
-                <td class="px-4 py-3 text-mute">{{ r.supplierName ?? 'any' }}</td>
-                <td class="px-4 py-3 text-mute">{{ r.manufacturerName ?? 'any' }}</td>
-                <td class="px-4 py-3 text-mute">{{ r.vehicleSystemSlug ?? 'any' }}</td>
-                <td class="px-4 py-3 font-mono text-xs text-mute">{{ band(r) }}</td>
+                <td class="col-wide px-4 py-3 text-mute">{{ r.clientCategoryName ?? 'any' }}</td>
+                <td class="col-wide px-4 py-3 text-mute">{{ r.supplierName ?? 'any' }}</td>
+                <td class="col-wide px-4 py-3 text-mute">{{ r.manufacturerName ?? 'any' }}</td>
+                <td class="col-wide px-4 py-3 text-mute">{{ r.vehicleSystemSlug ?? 'any' }}</td>
+                <td class="col-wide px-4 py-3 font-mono text-xs text-mute">{{ band(r) }}</td>
                 <td class="px-4 py-3 font-mono text-signal">{{ adjustment(r) }}</td>
                 <td class="px-4 py-3">
                   <button type="button" (click)="toggle(r)" [disabled]="busyId() === r.id"

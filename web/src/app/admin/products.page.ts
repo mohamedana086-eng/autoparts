@@ -147,26 +147,26 @@ const BLANK: ProductInput = {
       <div class="panel h-40 animate-pulse"></div>
     } @else {
       <div class="table-wrap">
-        <table class="w-full text-sm min-w-[920px]">
+        <table class="w-full text-sm sm:min-w-[920px]">
           <thead>
             <tr class="table-head">
-              <th class="px-4 py-3 font-medium"><span class="sr-only">Picture</span></th>
+              <th class="col-wide px-4 py-3 font-medium"><span class="sr-only">Picture</span></th>
               <th class="px-4 py-3 font-medium">Part number</th>
               <th class="px-4 py-3 font-medium">Name</th>
-              <th class="px-4 py-3 font-medium">Brand</th>
-              <th class="px-4 py-3 font-medium">System</th>
-              <th class="px-4 py-3 font-medium">Supplier</th>
-              <th class="px-4 py-3 font-medium text-right">Purchase</th>
-              <th class="px-4 py-3 font-medium">Delivery</th>
+              <th class="col-wide px-4 py-3 font-medium">Brand</th>
+              <th class="col-wide px-4 py-3 font-medium">System</th>
+              <th class="col-wide px-4 py-3 font-medium">Supplier</th>
+              <th class="col-wide px-4 py-3 font-medium text-right">Purchase</th>
+              <th class="col-wide px-4 py-3 font-medium">Delivery</th>
               <th class="px-4 py-3 font-medium text-right">In stock</th>
-              <th class="px-4 py-3 font-medium">Refs</th>
+              <th class="col-wide px-4 py-3 font-medium">Refs</th>
               <th class="px-4 py-3"></th>
             </tr>
           </thead>
           <tbody>
             @for (p of products(); track p.id) {
               <tr class="table-row">
-                <td class="px-4 py-3">
+                <td class="col-wide px-4 py-3">
                   @if (p.primaryImageUrl) {
                     <img [src]="p.primaryImageUrl" [alt]="p.name" loading="lazy"
                          class="w-9 h-9 rounded object-cover bg-ink-panel" />
@@ -177,17 +177,17 @@ const BLANK: ProductInput = {
                 </td>
                 <td class="px-4 py-3 font-mono text-xs">{{ p.partNumber }}</td>
                 <td class="px-4 py-3">{{ p.name }}</td>
-                <td class="px-4 py-3 text-mute">{{ p.manufacturerName }}</td>
-                <td class="px-4 py-3 text-mute">{{ p.systemName }}</td>
-                <td class="px-4 py-3 text-xs">
+                <td class="col-wide px-4 py-3 text-mute">{{ p.manufacturerName }}</td>
+                <td class="col-wide px-4 py-3 text-mute">{{ p.systemName }}</td>
+                <td class="col-wide px-4 py-3 text-xs">
                   @if (p.supplierName) {
                     {{ p.supplierName }}
                   } @else {
                     <span class="text-mute">— unsourced —</span>
                   }
                 </td>
-                <td class="px-4 py-3 text-right font-mono">€{{ p.basePrice.toFixed(2) }}</td>
-                <td class="px-4 py-3 font-mono text-xs">{{ p.stockDays }}d</td>
+                <td class="col-wide px-4 py-3 text-right font-mono">€{{ p.basePrice.toFixed(2) }}</td>
+                <td class="col-wide px-4 py-3 font-mono text-xs">{{ p.stockDays }}d</td>
                 <td class="px-4 py-3 text-right font-mono text-xs">
                   <!-- Zero held is a real answer and reads differently from a
                        part nobody has counted yet, so it is not dashed out. -->
@@ -202,7 +202,7 @@ const BLANK: ProductInput = {
                     }
                   }
                 </td>
-                <td class="px-4 py-3 font-mono text-xs text-mute">{{ p.interchangeCount }}</td>
+                <td class="col-wide px-4 py-3 font-mono text-xs text-mute">{{ p.interchangeCount }}</td>
                 <td class="px-4 py-3 text-right whitespace-nowrap">
                   <button type="button" (click)="toggleInventory(p)"
                           class="text-xs font-mono uppercase link-signal mr-3"

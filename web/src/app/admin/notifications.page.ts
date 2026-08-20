@@ -73,14 +73,14 @@ const BLANK: NotificationInput = { clientId: '', type: 'system', title: '', body
       <div class="panel h-40 animate-pulse"></div>
     } @else {
       <div class="table-wrap">
-        <table class="w-full text-sm min-w-[820px]">
+        <table class="w-full text-sm sm:min-w-[820px]">
           <thead>
             <tr class="table-head">
               <th class="px-4 py-3 font-medium">Sent</th>
               <th class="px-4 py-3 font-medium">To</th>
-              <th class="px-4 py-3 font-medium">Type</th>
+              <th class="col-wide px-4 py-3 font-medium">Type</th>
               <th class="px-4 py-3 font-medium">Title</th>
-              <th class="px-4 py-3 font-medium">Link</th>
+              <th class="col-wide px-4 py-3 font-medium">Link</th>
               <th class="px-4 py-3 font-medium">Read</th>
             </tr>
           </thead>
@@ -89,14 +89,14 @@ const BLANK: NotificationInput = { clientId: '', type: 'system', title: '', body
               <tr class="table-row">
                 <td class="px-4 py-3 text-mute text-xs font-mono">{{ n.createdAt.slice(0, 10) }}</td>
                 <td class="px-4 py-3">{{ n.clientName }}</td>
-                <td class="px-4 py-3 text-xs font-mono text-mute">{{ n.type }}</td>
+                <td class="col-wide px-4 py-3 text-xs font-mono text-mute">{{ n.type }}</td>
                 <td class="px-4 py-3">
                   {{ n.title }}
                   @if (n.body) {
                     <span class="block text-xs text-mute">{{ n.body }}</span>
                   }
                 </td>
-                <td class="px-4 py-3 text-xs font-mono text-mute">{{ n.link || '—' }}</td>
+                <td class="col-wide px-4 py-3 text-xs font-mono text-mute">{{ n.link || '—' }}</td>
                 <td class="px-4 py-3 text-xs">
                   @if (n.readAt) {
                     <span class="text-mute font-mono">{{ n.readAt.slice(0, 10) }}</span>

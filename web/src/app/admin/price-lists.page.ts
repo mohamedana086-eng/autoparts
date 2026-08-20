@@ -113,11 +113,11 @@ const CURRENCY_WORDS = /^(currency|curr|ccy)/i;
       <div class="panel h-40 animate-pulse"></div>
     } @else {
       <div class="table-wrap">
-        <table class="w-full text-sm min-w-[760px]">
+        <table class="w-full text-sm sm:min-w-[760px]">
           <thead>
             <tr class="table-head">
               <th class="px-4 py-3 font-medium">Name</th>
-              <th class="px-4 py-3 font-medium">Uploaded</th>
+              <th class="col-wide px-4 py-3 font-medium">Uploaded</th>
               <th class="px-4 py-3 font-medium text-right">Parts</th>
               <th class="px-4 py-3 font-medium">In force</th>
               <th class="px-4 py-3"></th>
@@ -135,7 +135,7 @@ const CURRENCY_WORDS = /^(currency|curr|ccy)/i;
                     <span class="block text-[10px] text-mute font-mono">{{ l.sourceName }}</span>
                   }
                 </td>
-                <td class="px-4 py-3 text-mute text-xs font-mono">{{ l.createdAt.slice(0, 10) }}</td>
+                <td class="col-wide px-4 py-3 text-mute text-xs font-mono">{{ l.createdAt.slice(0, 10) }}</td>
                 <td class="px-4 py-3 text-right font-mono">{{ l.itemCount }}</td>
                 <td class="px-4 py-3">
                   <button type="button" (click)="setActive(l, !l.active)" [disabled]="busyId() === l.id"

@@ -19,13 +19,13 @@ import type { ClientCategory } from '../core/admin.models';
       <div class="panel h-40 animate-pulse mb-8"></div>
     } @else {
       <div class="table-wrap mb-8">
-        <table class="w-full text-sm min-w-[640px]">
+        <table class="w-full text-sm sm:min-w-[640px]">
           <thead>
             <tr class="table-head">
               <th class="px-4 py-3 font-medium">Category</th>
               <th class="px-4 py-3 font-medium">Markup %</th>
-              <th class="px-4 py-3 font-medium">Min. order</th>
-              <th class="px-4 py-3 font-medium">Shelf life (days)</th>
+              <th class="col-wide px-4 py-3 font-medium">Min. order</th>
+              <th class="col-wide px-4 py-3 font-medium">Shelf life (days)</th>
               <th class="px-4 py-3 font-medium">Clients</th>
               <th class="px-4 py-3"></th>
             </tr>
@@ -35,8 +35,8 @@ import type { ClientCategory } from '../core/admin.models';
               <tr class="table-row">
                 <td class="px-4 py-3 font-medium">{{ c.name }}</td>
                 <td class="px-4 py-3 font-mono text-signal">{{ c.markupPercent }}%</td>
-                <td class="px-4 py-3 font-mono">€{{ c.minOrderAmount.toFixed(2) }}</td>
-                <td class="px-4 py-3 font-mono">{{ c.shelfLifeDays }}</td>
+                <td class="col-wide px-4 py-3 font-mono">€{{ c.minOrderAmount.toFixed(2) }}</td>
+                <td class="col-wide px-4 py-3 font-mono">{{ c.shelfLifeDays }}</td>
                 <td class="px-4 py-3 font-mono">{{ c.clientCount }}</td>
                 <td class="px-4 py-3 text-right">
                   <button type="button" (click)="remove(c)" [disabled]="deletingId() === c.id"
