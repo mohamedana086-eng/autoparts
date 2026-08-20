@@ -7,9 +7,9 @@
  *
  *   npm run db:suppliers
  */
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { loadEnv } from './env';
+import { sql, one } from '@/lib/sql';
+import { newId } from '@/lib/id';
 
 interface SupplierSeed {
   code: string;
@@ -71,41 +71,28 @@ const OE_SUPPLIER_CODE = 'IB16';
 
 async function main() {
   for (const s of SUPPLIERS) {
-    // `rating` and `acceptsReturns` are deliberately absent from `update`:
-    // they are an admin's own judgement and the supplier's own terms, and
-    // re-running the seed must not reset either. They are applied below only
-    // where nobody has set them.
-    await prisma.supplier.upsert({
-      where: { code: s.code },
-      update: {
-        name: s.name,
-        slug: s.slug,
-        reliability: s.reliability,
-        description: s.description,
-      },
-      create: {
-        code: s.code,
-        name: s.name,
-        slug: s.slug,
-        reliability: s.reliability,
-        description: s.description,
-        rating: s.rating,
-        acceptsReturns: s.acceptsReturns,
-      },
-    });
-
-    await prisma.supplier.updateMany({
-      where: { code: s.code, rating: null },
-      data: { rating: s.rating },
-    });
-
-    await prisma.supplier.updateMany({
-      where: { code: s.code, acceptsReturns: null },
-      data: { acceptsReturns: s.acceptsReturns },
-    });
+    // `rating` and `acceptsReturns` are set only on insert, and then only
+    // where nobody has set them: they are an admin's own judgement and the
+    // supplier's own terms, and re-running the seed must not reset either.
+    // COALESCE does that in the same statement the ORM needed three for.
+    await sql`
+      INSERT INTO "Supplier" ("id", "code", "name", "slug", "reliability", "description",
+                              "rating", "acceptsReturns")
+      VALUES (${newId()}, ${s.code}, ${s.name}, ${s.slug}, ${s.reliability}, ${s.description},
+              ${s.rating}, ${s.acceptsReturns})
+      ON CONFLICT ("code") DO UPDATE
+        SET "name" = EXCLUDED."name",
+            "slug" = EXCLUDED."slug",
+            "reliability" = EXCLUDED."reliability",
+            "description" = EXCLUDED."description",
+            "rating" = COALESCE("Supplier"."rating", EXCLUDED."rating"),
+            "acceptsReturns" = COALESCE("Supplier"."acceptsReturns", EXCLUDED."acceptsReturns")
+    `;
   }
 
-  const suppliers = await prisma.supplier.findMany();
+  const suppliers = await sql<{ id: string; code: string }>`
+    SELECT "id", "code" FROM "Supplier"
+  `;
   const byCode = new Map(suppliers.map((s) => [s.code, s]));
 
   const brandToSupplier = new Map<string, string>();
@@ -118,40 +105,72 @@ async function main() {
   const fallback = byCode.get(OE_SUPPLIER_CODE)?.id ?? suppliers[0]?.id;
 
   // Only parts with no supplier yet, so a correction made in the admin stands.
-  const unsourced = await prisma.product.findMany({
-    where: { supplierId: null },
-    include: { manufacturer: true },
-  });
-
+  // Assigned in one statement per supplier rather than one per part: the brand
+  // map is the only thing that decides, and it groups.
   let assigned = 0;
-  for (const product of unsourced) {
-    const supplierId = brandToSupplier.get(product.manufacturer.name) ?? fallback;
-    if (!supplierId) continue;
-    await prisma.product.update({ where: { id: product.id }, data: { supplierId } });
-    assigned++;
+  if (fallback) {
+    const byBrand = new Map<string, string[]>();
+    for (const [brand, supplierId] of brandToSupplier) {
+      byBrand.set(supplierId, [...(byBrand.get(supplierId) ?? []), brand]);
+    }
+
+    for (const [supplierId, brands] of byBrand) {
+      // RETURNING because the driver hands back rows, not a count, and the
+      // run reports how many parts it sourced.
+      const touched = await sql<{ id: string }>`
+        UPDATE "Product" p
+           SET "supplierId" = ${supplierId}
+          FROM "Manufacturer" m
+         WHERE m."id" = p."manufacturerId"
+           AND p."supplierId" IS NULL
+           AND m."name" = ANY(${brands}::text[])
+        RETURNING p."id"
+      `;
+      assigned += touched.length;
+    }
+
+    // Whatever is left carries a brand no supplier claims.
+    const rest = await sql<{ id: string }>`
+      UPDATE "Product" SET "supplierId" = ${fallback}
+       WHERE "supplierId" IS NULL
+      RETURNING "id"
+    `;
+    assigned += rest.length;
   }
 
-  console.log(`suppliers: ${await prisma.supplier.count()}`);
+  const summary = await sql<{
+    code: string; slug: string; rating: number | null; acceptsReturns: boolean | null; products: number;
+  }>`
+    SELECT s."code", s."slug", s."rating", s."acceptsReturns",
+           COUNT(p."id")::int AS "products"
+    FROM "Supplier" s
+    LEFT JOIN "Product" p ON p."supplierId" = s."id"
+    GROUP BY s."id"
+    ORDER BY s."code" ASC
+  `;
+
+  console.log(`suppliers: ${summary.length}`);
   console.log(`products sourced this run: ${assigned}`);
-  for (const s of await prisma.supplier.findMany({
-    include: { _count: { select: { products: true } } },
-    orderBy: { code: 'asc' },
-  })) {
+  for (const s of summary) {
     const returns =
       s.acceptsReturns === null ? 'returns?  ' : s.acceptsReturns ? 'returns ok' : 'no returns';
     console.log(
-      `  ${s.code.padEnd(6)} ${String(s._count.products).padStart(3)} parts  ` +
+      `  ${s.code.padEnd(6)} ${String(s.products).padStart(3)} parts  ` +
         `${s.rating === null ? 'unrated' : `${s.rating}/5    `}  ${returns}  /${s.slug}`
     );
   }
-  console.log(`unsourced remaining: ${await prisma.product.count({ where: { supplierId: null } })}`);
+
+  const left = await one<{ n: number }>`
+    SELECT COUNT(*)::int AS n FROM "Product" WHERE "supplierId" IS NULL
+  `;
+  console.log(`unsourced remaining: ${left?.n ?? 0}`);
 }
 
-main()
-  .catch((e) => {
+loadEnv();
+main().then(
+  () => process.exit(0),
+  (e) => {
     console.error(e);
     process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+  }
+);

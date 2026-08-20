@@ -18,9 +18,12 @@
  * ordering forty of something, and a few get none so "Out of stock" is
  * reachable without emptying a shelf by hand.
  */
-import { PrismaClient } from '@prisma/client';
+import { loadEnv } from './env';
+import { sql, one } from '@/lib/sql';
+import { newId } from '@/lib/id';
 
-const prisma = new PrismaClient();
+/** Statuses where the goods have left, so the allocation no longer holds stock. */
+const GONE = ['shipped', 'paid'];
 
 interface WarehouseSeed {
   code: string;
@@ -74,20 +77,25 @@ async function main() {
 
   const warehouses = new Map<string, string>();
   for (const w of WAREHOUSES) {
-    const row = await prisma.warehouse.upsert({
-      where: { code: w.code },
-      create: { ...w, active: true },
-      // Only reactivates and reasserts priority; a renamed site keeps its name.
-      update: { active: true, priority: w.priority },
-    });
-    warehouses.set(w.code, row.id);
+    // Only reactivates and reasserts priority; a renamed site keeps its name.
+    const row = await one<{ id: string }>`
+      INSERT INTO "Warehouse" ("id", "code", "name", "city", "priority", "active")
+      VALUES (${newId()}, ${w.code}, ${w.name}, ${w.city}, ${w.priority}, TRUE)
+      ON CONFLICT ("code") DO UPDATE
+        SET "active" = TRUE, "priority" = EXCLUDED."priority"
+      RETURNING "id"
+    `;
+    warehouses.set(w.code, row!.id);
   }
   console.log(`warehouses ready: ${WAREHOUSES.map((w) => w.code).join(', ')}`);
 
   if (reset) {
-    const { count } = await prisma.stockLevel.deleteMany({
-      where: { warehouseId: { in: [...warehouses.values()] } },
-    });
+    const cleared = await sql<{ id: string }>`
+      DELETE FROM "StockLevel"
+       WHERE "warehouseId" = ANY(${[...warehouses.values()]}::text[])
+      RETURNING "id"
+    `;
+    const count = cleared.length;
     console.log(`--reset: cleared ${count} stock row${count === 1 ? '' : 's'}`);
   }
 
@@ -103,22 +111,29 @@ async function main() {
    * So the counts are laid on top of what is owed rather than over it.
    */
   const owed = new Map<string, number>();
-  const allocations = await prisma.orderItemAllocation.findMany({
-    where: { orderItem: { order: { status: { notIn: ['shipped', 'paid'] } } } },
-    select: { warehouseId: true, quantity: true, orderItem: { select: { productId: true } } },
-  });
+  const allocations = await sql<{ productId: string; warehouseId: string; held: number }>`
+    SELECT oi."productId", a."warehouseId", SUM(a."quantity")::int AS "held"
+    FROM "OrderItemAllocation" a
+    JOIN "OrderItem" oi ON oi."id" = a."orderItemId"
+    JOIN "Order" o ON o."id" = oi."orderId"
+    WHERE o."status" <> ALL(${GONE}::text[])
+    GROUP BY oi."productId", a."warehouseId"
+  `;
   for (const a of allocations) {
-    const key = `${a.orderItem.productId}:${a.warehouseId}`;
-    owed.set(key, (owed.get(key) ?? 0) + a.quantity);
+    owed.set(`${a.productId}:${a.warehouseId}`, a.held);
   }
   if (owed.size > 0) {
     console.log(`${owed.size} shelf/shelves hold stock for open orders; those reservations are kept`);
   }
 
-  const products = await prisma.product.findMany({
-    select: { id: true, partNumber: true, _count: { select: { stock: true } } },
-    orderBy: { partNumber: 'asc' },
-  });
+  const products = await sql<{ id: string; partNumber: string; shelves: number }>`
+    SELECT p."id", p."partNumber", s."count"::int AS "shelves"
+    FROM "Product" p
+    LEFT JOIN LATERAL (
+      SELECT COUNT(*) AS "count" FROM "StockLevel" sl WHERE sl."productId" = p."id"
+    ) s ON TRUE
+    ORDER BY p."partNumber" ASC
+  `;
 
   let counted = 0;
   let skipped = 0;
@@ -127,7 +142,7 @@ async function main() {
 
   for (const product of products) {
     // Anything already counted is somebody's real figure. Leave it.
-    if (product._count.stock > 0) {
+    if (product.shelves > 0) {
       skipped++;
       continue;
     }
@@ -148,9 +163,12 @@ async function main() {
       // constraint refuses the row outright.
       const quantity = Math.max(planned, reserved);
 
-      await prisma.stockLevel.create({
-        data: { productId: product.id, warehouseId, quantity, reserved },
-      });
+      // updatedAt is NOT NULL with no default: the ORM filled it in on the way
+      // past, and nothing else does.
+      await sql`
+        INSERT INTO "StockLevel" ("id", "productId", "warehouseId", "quantity", "reserved", "updatedAt")
+        VALUES (${newId()}, ${product.id}, ${warehouseId}, ${quantity}, ${reserved}, CURRENT_TIMESTAMP)
+      `;
     }
 
     counted++;
@@ -166,9 +184,11 @@ counted ${counted} part${counted === 1 ? '' : 's'}${skipped ? `, left ${skipped}
 `);
 }
 
-main()
-  .catch((e) => {
+loadEnv();
+main().then(
+  () => process.exit(0),
+  (e) => {
     console.error(e);
     process.exit(1);
-  })
-  .finally(() => prisma.$disconnect());
+  }
+);
