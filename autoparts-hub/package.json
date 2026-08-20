@@ -16,7 +16,8 @@
     "db:suppliers": "tsx --conditions=react-server prisma/seed-suppliers.ts",
     "db:stock": "tsx --conditions=react-server prisma/seed-stock.ts",
     "db:import:tecdoc": "tsx --conditions=react-server prisma/import-tecdoc.ts",
-    "db:reconcile": "tsx --conditions=react-server prisma/reconcile-stock.ts"
+    "db:reconcile": "tsx --conditions=react-server prisma/reconcile-stock.ts",
+    "db:check": "tsx prisma/check-schema.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",

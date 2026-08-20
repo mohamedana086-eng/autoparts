@@ -156,9 +156,23 @@ verification, part-number normalisation and the admin validators. No database
 and no HTTP: everything covered here is a function of its arguments, which is
 why it can be pinned down exactly.
 
-Nothing that reaches Prisma is faked. A mocked client proves the mock behaves,
-not the query, so the routes are checked by running them against a real
-database instead.
+Nothing that reaches the database is faked. A mocked driver proves the mock
+behaves, not the query, so the routes are checked by running them against a
+real database instead.
+
+```bash
+npm run db:check
+```
+
+Checks `prisma/schema.prisma` against `prisma/migrations`. Nothing generates
+from the schema file any more, so it is documentation — and documentation
+nothing checks goes wrong quietly. This replays the migration SQL in memory
+and compares the result against the models; it needs no database, and any SQL
+it does not recognise is an error rather than something skipped.
+
+CI runs it on every push, along with the types, the tests and both builds, and
+two greps that fail if an ORM import or a query built by string concatenation
+reappears. `.github/workflows/ci.yml`. None of it needs a secret.
 
 `lib/pricing.ts` is the one to keep covered as it changes. It decides what
 every customer pays, the order of its three steps is load-bearing — markup,
