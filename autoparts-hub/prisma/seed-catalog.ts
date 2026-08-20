@@ -13,9 +13,9 @@
  * a real catalogue. Replace this with a TecDoc/TecAlliance import when you
  * connect real inventory.
  */
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { loadEnv } from './env';
+import { sql, one } from '@/lib/sql';
+import { newId } from '@/lib/id';
 
 /** [name, isOEM] — isOEM marks a vehicle maker's own brand, matching the
  *  existing seed where METALCAUCHO (aftermarket) is false. */
@@ -213,58 +213,66 @@ const INTERCHANGES: Record<string, Array<[string, string, boolean]>> = {
 
 async function main() {
   // ---- manufacturers ----
-  for (const [name, isOEM] of MANUFACTURERS) {
-    await prisma.manufacturer.upsert({
-      where: { name },
-      update: {},
-      create: { name, isOEM },
-    });
-  }
+  // DO NOTHING, not DO UPDATE: `isOEM` is only ever asserted on insert, which
+  // is what the ORM's empty `update: {}` meant.
+  await sql`
+    INSERT INTO "Manufacturer" ("id", "name", "isOEM")
+    SELECT * FROM unnest(
+      ${MANUFACTURERS.map(() => newId())}::text[],
+      ${MANUFACTURERS.map(([name]) => name)}::text[],
+      ${MANUFACTURERS.map(([, isOEM]) => isOEM)}::boolean[]
+    )
+    ON CONFLICT ("name") DO NOTHING
+  `;
 
   const manufacturers = new Map(
-    (await prisma.manufacturer.findMany()).map((m) => [m.name, m.id])
+    (await sql<{ name: string; id: string }>`SELECT "name", "id" FROM "Manufacturer"`).map(
+      (m) => [m.name, m.id] as const
+    )
   );
   const systems = new Map(
-    (await prisma.vehicleSystem.findMany()).map((s) => [s.slug, s.id])
+    (await sql<{ slug: string; id: string }>`SELECT "slug", "id" FROM "VehicleSystem"`).map(
+      (s) => [s.slug, s.id] as const
+    )
   );
 
   // ---- products ----
-  let created = 0;
-  let updated = 0;
-
   for (const p of PRODUCTS) {
-    const manufacturerId = manufacturers.get(p.manufacturer);
-    const vehicleSystemId = systems.get(p.system);
-
-    if (!manufacturerId) throw new Error(`Unknown manufacturer: ${p.manufacturer}`);
-    if (!vehicleSystemId) throw new Error(`Unknown vehicle system: ${p.system}`);
-
-    const existing = await prisma.product.findUnique({ where: { partNumber: p.partNumber } });
-
-    await prisma.product.upsert({
-      where: { partNumber: p.partNumber },
-      update: {
-        name: p.name,
-        description: p.description ?? null,
-        manufacturerId,
-        vehicleSystemId,
-        basePrice: p.basePrice,
-        stockDays: p.stockDays,
-      },
-      create: {
-        partNumber: p.partNumber,
-        name: p.name,
-        description: p.description ?? null,
-        manufacturerId,
-        vehicleSystemId,
-        basePrice: p.basePrice,
-        stockDays: p.stockDays,
-      },
-    });
-
-    if (existing) updated++;
-    else created++;
+    if (!manufacturers.get(p.manufacturer)) {
+      throw new Error(`Unknown manufacturer: ${p.manufacturer}`);
+    }
+    if (!systems.get(p.system)) throw new Error(`Unknown vehicle system: ${p.system}`);
   }
+
+  // One statement for the whole list, and `xmax = 0` to tell an insert from an
+  // update — Postgres leaves the inserting transaction id at zero on a fresh
+  // row, so the same RETURNING that hands back the rows also says which were
+  // new. The ORM needed a lookup per part to answer that.
+  const written = await sql<{ partNumber: string; inserted: boolean }>`
+    INSERT INTO "Product" ("id", "partNumber", "name", "description", "manufacturerId",
+                           "vehicleSystemId", "basePrice", "stockDays")
+    SELECT * FROM unnest(
+      ${PRODUCTS.map(() => newId())}::text[],
+      ${PRODUCTS.map((p) => p.partNumber)}::text[],
+      ${PRODUCTS.map((p) => p.name)}::text[],
+      ${PRODUCTS.map((p) => p.description ?? null)}::text[],
+      ${PRODUCTS.map((p) => manufacturers.get(p.manufacturer)!)}::text[],
+      ${PRODUCTS.map((p) => systems.get(p.system)!)}::text[],
+      ${PRODUCTS.map((p) => p.basePrice)}::double precision[],
+      ${PRODUCTS.map((p) => p.stockDays)}::int[]
+    )
+    ON CONFLICT ("partNumber") DO UPDATE
+      SET "name" = EXCLUDED."name",
+          "description" = EXCLUDED."description",
+          "manufacturerId" = EXCLUDED."manufacturerId",
+          "vehicleSystemId" = EXCLUDED."vehicleSystemId",
+          "basePrice" = EXCLUDED."basePrice",
+          "stockDays" = EXCLUDED."stockDays"
+    RETURNING "partNumber", ("xmax" = 0) AS "inserted"
+  `;
+
+  const created = written.filter((r) => r.inserted).length;
+  const updated = written.length - created;
 
   // ---- interchanges ----
   // Interchange has no unique constraint, so only fill in products that have
@@ -272,56 +280,82 @@ async function main() {
   // leaves any cross-references added by hand alone.
   let interchangesAdded = 0;
 
+  // Every part number in one lookup, with how many cross-references it already
+  // carries, rather than a query per entry.
+  const carrying = new Map(
+    (
+      await sql<{ partNumber: string; id: string; refs: number }>`
+        SELECT p."partNumber", p."id", n."count"::int AS "refs"
+        FROM "Product" p
+        LEFT JOIN LATERAL (
+          SELECT COUNT(*) AS "count" FROM "Interchange" i WHERE i."sourceId" = p."id"
+        ) n ON TRUE
+      `
+    ).map((r) => [r.partNumber, r] as const)
+  );
+
+  const fresh: Array<[string, string, string, boolean]> = [];
   for (const [partNumber, refs] of Object.entries(INTERCHANGES)) {
-    const product = await prisma.product.findUnique({
-      where: { partNumber },
-      include: { _count: { select: { interchanges: true } } },
-    });
-    if (!product || product._count.interchanges > 0) continue;
-
-    await prisma.interchange.createMany({
-      data: refs.map(([targetPartNo, targetManufacturer, exactMatch]) => ({
-        sourceId: product.id,
-        targetPartNo,
-        targetManufacturer,
-        exactMatch,
-      })),
-    });
-    interchangesAdded += refs.length;
-  }
-
-  // Checked one at a time rather than skipping a product that already has
-  // cross-references: these were added after the block above, so every seeded
-  // product already has some, and a whole-product guard would never let an OE
-  // number in.
-  for (const [partNumber, refs] of Object.entries(OE_REFERENCES)) {
-    const product = await prisma.product.findUnique({ where: { partNumber } });
-    if (!product) continue;
-
-    for (const [targetPartNo, targetManufacturer] of refs) {
-      const exists = await prisma.interchange.findFirst({
-        where: { sourceId: product.id, targetPartNo },
-      });
-      if (exists) continue;
-
-      await prisma.interchange.create({
-        data: {
-          sourceId: product.id,
-          targetPartNo,
-          targetManufacturer,
-          exactMatch: true,
-          isOEM: true,
-        },
-      });
-      interchangesAdded++;
+    const product = carrying.get(partNumber);
+    if (!product || product.refs > 0) continue;
+    for (const [targetPartNo, targetManufacturer, exactMatch] of refs) {
+      fresh.push([product.id, targetPartNo, targetManufacturer, exactMatch]);
     }
   }
 
-  const totals = {
-    products: await prisma.product.count(),
-    manufacturers: await prisma.manufacturer.count(),
-    interchanges: await prisma.interchange.count(),
-  };
+  if (fresh.length > 0) {
+    await sql`
+      INSERT INTO "Interchange" ("id", "sourceId", "targetPartNo", "targetManufacturer", "exactMatch")
+      SELECT * FROM unnest(
+        ${fresh.map(() => newId())}::text[],
+        ${fresh.map((r) => r[0])}::text[],
+        ${fresh.map((r) => r[1])}::text[],
+        ${fresh.map((r) => r[2])}::text[],
+        ${fresh.map((r) => r[3])}::boolean[]
+      )
+    `;
+    interchangesAdded += fresh.length;
+  }
+
+  // Checked pair by pair rather than skipping a product that already has
+  // cross-references: these were added after the block above, so every seeded
+  // product already has some, and a whole-product guard would never let an OE
+  // number in. Interchange has no unique constraint to lean on, so the
+  // NOT EXISTS does the same job in the statement instead of a query per pair.
+  const oe: Array<[string, string, string]> = [];
+  for (const [partNumber, refs] of Object.entries(OE_REFERENCES)) {
+    const product = carrying.get(partNumber);
+    if (!product) continue;
+    for (const [targetPartNo, targetManufacturer] of refs) {
+      oe.push([product.id, targetPartNo, targetManufacturer]);
+    }
+  }
+
+  if (oe.length > 0) {
+    const added = await sql<{ id: string }>`
+      INSERT INTO "Interchange" ("id", "sourceId", "targetPartNo", "targetManufacturer",
+                                 "exactMatch", "isOEM")
+      SELECT w."id", w."sourceId", w."targetPartNo", w."targetManufacturer", TRUE, TRUE
+      FROM unnest(
+        ${oe.map(() => newId())}::text[],
+        ${oe.map((r) => r[0])}::text[],
+        ${oe.map((r) => r[1])}::text[],
+        ${oe.map((r) => r[2])}::text[]
+      ) AS w("id", "sourceId", "targetPartNo", "targetManufacturer")
+      WHERE NOT EXISTS (
+        SELECT 1 FROM "Interchange" i
+        WHERE i."sourceId" = w."sourceId" AND i."targetPartNo" = w."targetPartNo"
+      )
+      RETURNING "id"
+    `;
+    interchangesAdded += added.length;
+  }
+
+  const totals = (await one<{ products: number; manufacturers: number; interchanges: number }>`
+    SELECT (SELECT COUNT(*) FROM "Product")::int AS "products",
+           (SELECT COUNT(*) FROM "Manufacturer")::int AS "manufacturers",
+           (SELECT COUNT(*) FROM "Interchange")::int AS "interchanges"
+  `)!;
 
   console.log(`products: ${created} created, ${updated} updated`);
   console.log(`interchanges added: ${interchangesAdded}`);
@@ -330,11 +364,11 @@ async function main() {
   );
 }
 
-main()
-  .catch((e) => {
+loadEnv();
+main().then(
+  () => process.exit(0),
+  (e) => {
     console.error(e);
     process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+  }
+);

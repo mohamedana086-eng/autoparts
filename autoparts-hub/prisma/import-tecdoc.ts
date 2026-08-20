@@ -28,7 +28,9 @@
  *
  * The closing report counts how many products are still waiting on a price.
  */
-import { PrismaClient } from '@prisma/client';
+import { loadEnv } from './env';
+import { sql, one, scalar, tx } from '@/lib/sql';
+import { newId } from '@/lib/id';
 
 import {
   TecDocClient,
@@ -51,8 +53,6 @@ import type {
   TecDocVehicleManufacturer,
   TecDocVehicleType,
 } from '../lib/tecdoc/types';
-
-const prisma = new PrismaClient();
 
 /**
  * The web-service function names, in one place. TecAlliance renames these
@@ -183,10 +183,14 @@ class Lookups {
   private manufacturers = new Map<string, string>();
 
   async load(): Promise<void> {
-    for (const system of await prisma.vehicleSystem.findMany()) {
+    for (const system of await sql<{ slug: string; id: string }>`
+      SELECT "slug", "id" FROM "VehicleSystem"
+    `) {
       this.systems.set(system.slug, system.id);
     }
-    for (const manufacturer of await prisma.manufacturer.findMany()) {
+    for (const manufacturer of await sql<{ name: string; id: string }>`
+      SELECT "name", "id" FROM "Manufacturer"
+    `) {
       this.manufacturers.set(manufacturer.name, manufacturer.id);
     }
   }
@@ -206,13 +210,17 @@ class Lookups {
       return `(new) ${name}`;
     }
 
-    const created = await prisma.manufacturer.upsert({
-      where: { name },
-      update: {},
-      create: { name, isOEM },
-    });
-    this.manufacturers.set(name, created.id);
-    return created.id;
+    // DO UPDATE rather than DO NOTHING purely so the row comes back: a
+    // conflicting DO NOTHING returns nothing, and the id is what is wanted.
+    // The assignment is to the column's own value, so nothing changes.
+    const created = await one<{ id: string }>`
+      INSERT INTO "Manufacturer" ("id", "name", "isOEM")
+      VALUES (${newId()}, ${name}, ${isOEM})
+      ON CONFLICT ("name") DO UPDATE SET "name" = EXCLUDED."name"
+      RETURNING "id"
+    `;
+    this.manufacturers.set(name, created!.id);
+    return created!.id;
   }
 }
 
@@ -245,18 +253,24 @@ async function importProduct(
     options.apply
   );
 
-  const existing = await prisma.product.findFirst({
-    where: product.tecDocArticleId
-      ? { OR: [{ tecDocId: product.tecDocArticleId }, { partNumber: product.partNumber }] }
-      : { partNumber: product.partNumber },
-    include: { manufacturer: true },
-  });
+  // Matched on TecDoc's own id where there is one, and on the part number
+  // otherwise — both in one statement, with the null-cancelling filter doing
+  // the work the ORM's conditional `where` did.
+  const existing = await one<{ id: string; manufacturerName: string }>`
+    SELECT p."id", m."name" AS "manufacturerName"
+    FROM "Product" p
+    JOIN "Manufacturer" m ON m."id" = p."manufacturerId"
+    WHERE (${product.tecDocArticleId ?? null}::int IS NOT NULL
+           AND p."tecDocId" = ${product.tecDocArticleId ?? null})
+       OR p."partNumber" = ${product.partNumber}
+    LIMIT 1
+  `;
 
-  if (existing && existing.manufacturer.name !== product.manufacturerName) {
+  if (existing && existing.manufacturerName !== product.manufacturerName) {
     report.collisions.push({
       partNumber: product.partNumber,
       incoming: product.manufacturerName,
-      existing: existing.manufacturer.name,
+      existing: existing.manufacturerName,
     });
     return null;
   }
@@ -281,37 +295,54 @@ async function importProduct(
 
   let id: string;
   if (existing) {
-    await prisma.product.update({ where: { id: existing.id }, data: catalogueFields });
+    await sql`
+      UPDATE "Product"
+         SET "name" = ${catalogueFields.name},
+             "description" = ${catalogueFields.description},
+             "manufacturerId" = ${catalogueFields.manufacturerId},
+             "vehicleSystemId" = ${catalogueFields.vehicleSystemId},
+             "tecDocId" = ${catalogueFields.tecDocId}
+       WHERE "id" = ${existing.id}
+    `;
     id = existing.id;
     report.productsUpdated++;
   } else {
-    const created = await prisma.product.create({
-      data: {
-        ...catalogueFields,
-        partNumber: product.partNumber,
-        basePrice: 0, // no price in TecDoc — a supplier feed sets this
-        stockDays: product.stockDays,
-      },
-    });
-    id = created.id;
+    id = newId();
+    await sql`
+      INSERT INTO "Product" ("id", "partNumber", "name", "description", "manufacturerId",
+                             "vehicleSystemId", "tecDocId", "basePrice", "stockDays")
+      VALUES (${id}, ${product.partNumber}, ${catalogueFields.name},
+              ${catalogueFields.description}, ${catalogueFields.manufacturerId},
+              ${catalogueFields.vehicleSystemId}, ${catalogueFields.tecDocId},
+              0, ${product.stockDays})
+    `;
+    // basePrice 0 above: no price in TecDoc — a supplier feed sets this.
     report.productsCreated++;
   }
 
   // Cross-references are replaced wholesale: TecDoc dropping a reference is
   // as meaningful as it adding one, and there is no stable id to diff on.
-  await prisma.interchange.deleteMany({ where: { sourceId: id } });
-  if (product.interchanges.length > 0) {
-    await prisma.interchange.createMany({
-      data: product.interchanges.map((x) => ({
-        sourceId: id,
-        targetPartNo: x.targetPartNo,
-        targetManufacturer: x.targetManufacturer,
-        exactMatch: x.exactMatch,
-        isOEM: x.isOEM,
-      })),
-    });
-    report.interchangesWritten += product.interchanges.length;
-  }
+  // Both halves in one transaction, so a failure between them cannot leave a
+  // part with its old references deleted and no new ones written.
+  await tx(async (t) => {
+    await t.sql`DELETE FROM "Interchange" WHERE "sourceId" = ${id}`;
+
+    if (product.interchanges.length > 0) {
+      await t.sql`
+        INSERT INTO "Interchange" ("id", "sourceId", "targetPartNo", "targetManufacturer",
+                                   "exactMatch", "isOEM")
+        SELECT * FROM unnest(
+          ${product.interchanges.map(() => newId())}::text[],
+          ${product.interchanges.map(() => id)}::text[],
+          ${product.interchanges.map((x) => x.targetPartNo)}::text[],
+          ${product.interchanges.map((x) => x.targetManufacturer)}::text[],
+          ${product.interchanges.map((x) => x.exactMatch)}::boolean[],
+          ${product.interchanges.map((x) => x.isOEM)}::boolean[]
+        )
+      `;
+    }
+  });
+  report.interchangesWritten += product.interchanges.length;
 
   return id;
 }
@@ -345,22 +376,28 @@ async function importVehicles(
 
     let makeId: string | null = null;
     if (options.apply) {
-      const existing = await prisma.vehicleMake.findFirst({
-        where: { OR: [{ tecDocId: manufacturer.manufacturerId }, { name }] },
-      });
+      // Matched on TecDoc's id or on the name, whichever finds it first — a
+      // make seeded by hand has a name and no TecDoc id, and this is where it
+      // acquires one.
+      const existing = await one<{ id: string; tecDocId: number | null }>`
+        SELECT "id", "tecDocId" FROM "VehicleMake"
+        WHERE "tecDocId" = ${manufacturer.manufacturerId} OR "name" = ${name}
+        LIMIT 1
+      `;
       if (existing) {
         makeId = existing.id;
         if (existing.tecDocId === null) {
-          await prisma.vehicleMake.update({
-            where: { id: existing.id },
-            data: { tecDocId: manufacturer.manufacturerId },
-          });
+          await sql`
+            UPDATE "VehicleMake" SET "tecDocId" = ${manufacturer.manufacturerId}
+             WHERE "id" = ${existing.id}
+          `;
         }
       } else {
-        const created = await prisma.vehicleMake.create({
-          data: { name, wmiCodes: [], tecDocId: manufacturer.manufacturerId },
-        });
-        makeId = created.id;
+        makeId = newId();
+        await sql`
+          INSERT INTO "VehicleMake" ("id", "name", "wmiCodes", "tecDocId")
+          VALUES (${makeId}, ${name}, ${[] as string[]}::text[], ${manufacturer.manufacturerId})
+        `;
         report.makesCreated++;
       }
     } else {
@@ -378,32 +415,27 @@ async function importVehicles(
 
       let modelId: string | null = null;
       if (options.apply && makeId) {
-        const existing = await prisma.vehicleModel.findFirst({
-          where: {
-            OR: [{ tecDocId: model.tecDocModelId }, { makeId, name: model.name }],
-          },
-        });
+        const existing = await one<{ id: string }>`
+          SELECT "id" FROM "VehicleModel"
+          WHERE "tecDocId" = ${model.tecDocModelId}
+             OR ("makeId" = ${makeId} AND "name" = ${model.name})
+          LIMIT 1
+        `;
         if (existing) {
           modelId = existing.id;
-          await prisma.vehicleModel.update({
-            where: { id: existing.id },
-            data: {
-              yearFrom: model.yearFrom,
-              yearTo: model.yearTo,
-              tecDocId: model.tecDocModelId,
-            },
-          });
+          await sql`
+            UPDATE "VehicleModel"
+               SET "yearFrom" = ${model.yearFrom}, "yearTo" = ${model.yearTo},
+                   "tecDocId" = ${model.tecDocModelId}
+             WHERE "id" = ${existing.id}
+          `;
         } else {
-          const created = await prisma.vehicleModel.create({
-            data: {
-              makeId,
-              name: model.name,
-              yearFrom: model.yearFrom,
-              yearTo: model.yearTo,
-              tecDocId: model.tecDocModelId,
-            },
-          });
-          modelId = created.id;
+          modelId = newId();
+          await sql`
+            INSERT INTO "VehicleModel" ("id", "makeId", "name", "yearFrom", "yearTo", "tecDocId")
+            VALUES (${modelId}, ${makeId}, ${model.name}, ${model.yearFrom}, ${model.yearTo},
+                    ${model.tecDocModelId})
+          `;
           report.modelsCreated++;
         }
       } else {
@@ -429,29 +461,32 @@ async function importVehicles(
           continue;
         }
 
-        const existing = await prisma.vehicleVariant.findFirst({
-          where: {
-            OR: [{ tecDocId: variant.tecDocVehicleId }, { modelId, name: variant.name }],
-          },
-        });
-
-        const data = {
-          engineCode: variant.engineCode,
-          powerKw: variant.powerKw,
-          fuel: variant.fuel,
-          yearFrom: variant.yearFrom,
-          yearTo: variant.yearTo,
-          tecDocId: variant.tecDocVehicleId,
-        };
+        const existing = await one<{ id: string }>`
+          SELECT "id" FROM "VehicleVariant"
+          WHERE "tecDocId" = ${variant.tecDocVehicleId}
+             OR ("modelId" = ${modelId} AND "name" = ${variant.name})
+          LIMIT 1
+        `;
 
         if (existing) {
-          await prisma.vehicleVariant.update({ where: { id: existing.id }, data });
+          await sql`
+            UPDATE "VehicleVariant"
+               SET "engineCode" = ${variant.engineCode}, "powerKw" = ${variant.powerKw},
+                   "fuel" = ${variant.fuel}, "yearFrom" = ${variant.yearFrom},
+                   "yearTo" = ${variant.yearTo}, "tecDocId" = ${variant.tecDocVehicleId}
+             WHERE "id" = ${existing.id}
+          `;
           variantIdByTecDocId.set(variant.tecDocVehicleId, existing.id);
         } else {
-          const created = await prisma.vehicleVariant.create({
-            data: { ...data, modelId, name: variant.name },
-          });
-          variantIdByTecDocId.set(variant.tecDocVehicleId, created.id);
+          const created = newId();
+          await sql`
+            INSERT INTO "VehicleVariant" ("id", "modelId", "name", "engineCode", "powerKw",
+                                          "fuel", "yearFrom", "yearTo", "tecDocId")
+            VALUES (${created}, ${modelId}, ${variant.name}, ${variant.engineCode},
+                    ${variant.powerKw}, ${variant.fuel}, ${variant.yearFrom},
+                    ${variant.yearTo}, ${variant.tecDocVehicleId})
+          `;
+          variantIdByTecDocId.set(variant.tecDocVehicleId, created);
           report.variantsCreated++;
         }
       }
@@ -488,11 +523,11 @@ async function importFitments(
       continue;
     }
 
-    await prisma.fitment.upsert({
-      where: { productId_variantId: { productId, variantId } },
-      update: { note: fitment.note },
-      create: { productId, variantId, note: fitment.note },
-    });
+    await sql`
+      INSERT INTO "Fitment" ("id", "productId", "variantId", "note")
+      VALUES (${newId()}, ${productId}, ${variantId}, ${fitment.note})
+      ON CONFLICT ("productId", "variantId") DO UPDATE SET "note" = EXCLUDED."note"
+    `;
     report.fitmentsCreated++;
   }
 }
@@ -624,7 +659,9 @@ function printReport(report: Report, options: Options): void {
 
 /** How much of the catalogue cannot be sold yet for want of a price. */
 async function printPricingGap(): Promise<void> {
-  const unpriced = await prisma.product.count({ where: { basePrice: { lte: 0 } } });
+  const unpriced = await scalar`
+    SELECT COUNT(*) FROM "Product" WHERE "basePrice" <= 0
+  `;
   if (unpriced === 0) return;
 
   console.log('');
@@ -634,19 +671,20 @@ async function printPricingGap(): Promise<void> {
   );
 }
 
+loadEnv();
 main()
   .then(printPricingGap)
-  .catch((e) => {
-    if (e instanceof TecDocError) {
-      console.error(`\nTecDoc call failed: ${e.message}`);
-      if (e.status === 401 || e.status === 403) {
-        console.error('Check TECDOC_API_KEY and TECDOC_PROVIDER_ID.');
+  .then(
+    () => process.exit(0),
+    (e) => {
+      if (e instanceof TecDocError) {
+        console.error(`\nTecDoc call failed: ${e.message}`);
+        if (e.status === 401 || e.status === 403) {
+          console.error('Check TECDOC_API_KEY and TECDOC_PROVIDER_ID.');
+        }
+      } else {
+        console.error(e);
       }
-    } else {
-      console.error(e);
+      process.exit(1);
     }
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+  );
