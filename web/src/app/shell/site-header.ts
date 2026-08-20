@@ -31,12 +31,36 @@ import type { ProductSummary } from '../core/api.models';
                  the only link to the panel on isAdmin left salespeople allowed
                  in with no way to get there but typing the url. What they see
                  inside is narrowed by the nav and enforced by the API. -->
+            <!-- An icon that is always there, with the word alongside it once
+                 there is room — the pattern the rest of this bar already uses.
+                 These two were text-only and hidden below sm, so on a phone the
+                 admin panel and a customer's own orders had no link at all and
+                 no menu to find them in: the url was the only way in. -->
             @if (auth.isStaff()) {
-              <a routerLink="/admin" class="hover:text-paper transition-colors hidden sm:inline">Admin</a>
+              <a routerLink="/admin" class="hover:text-paper transition-colors flex items-center gap-1.5"
+                 aria-label="Admin panel">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/>
+                  <line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/>
+                  <line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/>
+                  <line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/>
+                  <line x1="17" y1="16" x2="23" y2="16"/>
+                </svg>
+                <span class="hidden lg:inline">Admin</span>
+              </a>
             }
 
             @if (auth.isLoggedIn()) {
-              <a routerLink="/orders" class="hover:text-paper transition-colors hidden sm:inline">Orders</a>
+              <a routerLink="/orders" class="hover:text-paper transition-colors flex items-center gap-1.5"
+                 aria-label="Your orders">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                  <polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>
+                </svg>
+                <span class="hidden lg:inline">Orders</span>
+              </a>
 
               <a routerLink="/notifications" class="hover:text-paper transition-colors"
                  [attr.aria-label]="notificationsLabel()">
