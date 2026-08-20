@@ -1,0 +1,108 @@
+name: CI
+
+# Runs on every push and pull request. Nothing here needs a database or any
+# secret: the API's connection string and auth secret are both resolved lazily
+# at the first request, so a build never reaches for them, and the schema
+# check replays the migration SQL in memory rather than applying it.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A second push to the same branch makes the first run's answer irrelevant.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: API
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: autoparts-hub
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: autoparts-hub/package-lock.json
+
+      # ci, not install: it installs exactly what the lockfile pins and fails
+      # if package.json and the lockfile disagree. Vercel builds the same way,
+      # so a lockfile that only works after an incremental install fails here
+      # rather than in a deploy.
+      - run: npm ci
+
+      - name: Types
+        run: npx tsc --noEmit
+
+      - name: Tests
+        run: npm test
+
+      - name: schema.prisma matches the migrations
+        run: npm run db:check
+
+      - name: Build
+        run: npm run build
+
+  web:
+    name: Storefront
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - run: npm ci
+
+      - name: Build
+        run: npm run build
+
+  no-orm:
+    name: No ORM crept back in
+    runs-on: ubuntu-latest
+
+    # The application reads through lib/sql.ts and nothing else. This is here
+    # because that is a decision rather than a fact of the code: an import
+    # added in a hurry would restore the ORM to the dependency tree and nothing
+    # else in this pipeline would notice.
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: No Prisma imports
+        run: |
+          if grep -rn "@prisma/client\|PrismaClient" \
+               --include=*.ts --include=*.tsx \
+               autoparts-hub/app autoparts-hub/lib autoparts-hub/prisma autoparts-hub/test; then
+            echo "::error::Prisma is imported again. The application reads through lib/sql.ts."
+            exit 1
+          fi
+          echo "No Prisma imports."
+
+      - name: No query text built from strings
+        # Every query is a tagged template, which binds its parameters.
+        # Handing a query function a string built with + or interpolated with
+        # ${} instead is how a parameter stops being a parameter.
+        #
+        # It catches the call, not every way a string could be assembled
+        # earlier and passed in under a variable name — a grep cannot follow
+        # that. It covers the shape someone actually writes in a hurry.
+        run: |
+          if grep -rnE '(sql|query)\s*\(\s*[`"'"'"'].*(\+|\$\{)' \
+               --include=*.ts autoparts-hub/app autoparts-hub/lib; then
+            echo "::error::A query looks assembled from strings. Use a tagged template."
+            exit 1
+          fi
+          echo "No assembled query text."
