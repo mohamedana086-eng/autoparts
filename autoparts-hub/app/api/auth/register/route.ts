@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { createClient, emailTaken, retailTierId } from '@/lib/clients';
 import { hashPassword, createSession, toRole } from '@/lib/auth';
 
 // POST /api/auth/register { name, email, password, role, city }
@@ -28,24 +28,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid account type.' }, { status: 400 });
   }
 
-  const existing = await prisma.client.findUnique({ where: { email } });
-  if (existing) {
+  if (await emailTaken(email)) {
     return NextResponse.json({ error: 'An account with this email already exists.' }, { status: 409 });
   }
 
   // New accounts start on the Retail tier. B2B applicants are reviewed by an
   // admin from /admin/clients and moved onto a negotiated tier later.
-  const retail = await prisma.clientCategory.findFirst({ where: { name: 'Retail' } });
+  const retailTier = await retailTierId();
 
-  const client = await prisma.client.create({
-    data: {
-      name,
-      email,
-      city,
-      role,
-      passwordHash: await hashPassword(password),
-      categoryId: retail?.id ?? null,
-    },
+  const client = await createClient({
+    name,
+    email,
+    city,
+    role,
+    passwordHash: await hashPassword(password),
+    categoryId: retailTier,
   });
 
   await createSession(client);

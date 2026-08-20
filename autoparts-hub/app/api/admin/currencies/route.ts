@@ -1,21 +1,14 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
 import { requireAdmin } from '@/lib/admin-guard';
-import { readCurrencyInput, serialiseCurrency } from '@/lib/admin-currencies';
+import { readCurrencyInput } from '@/lib/admin-currencies';
+import { adminCurrencies, createCurrency, currencyById, currencyIdByCode } from '@/lib/pricing-admin';
 
 // GET /api/admin/currencies — every currency, with how many accounts use it.
 export async function GET() {
   const denied = await requireAdmin();
   if (denied) return denied;
 
-  const currencies = await prisma.currency.findMany({
-    include: { _count: { select: { clients: true } } },
-    // Base first, then alphabetical: the base is the one everything else is
-    // measured against, so it belongs at the top rather than under E.
-    orderBy: [{ isBase: 'desc' }, { code: 'asc' }],
-  });
-
-  return NextResponse.json({ currencies: currencies.map(serialiseCurrency) });
+  return NextResponse.json({ currencies: await adminCurrencies() });
 }
 
 // POST /api/admin/currencies
@@ -33,7 +26,7 @@ export async function POST(req: Request) {
   const input = readCurrencyInput(body);
   if (!input.ok) return NextResponse.json({ error: input.error }, { status: 400 });
 
-  const clash = await prisma.currency.findUnique({ where: { code: input.value.code } });
+  const clash = await currencyIdByCode(input.value.code);
   if (clash) {
     return NextResponse.json(
       { error: `${input.value.code} is already on the list.` },
@@ -41,8 +34,7 @@ export async function POST(req: Request) {
     );
   }
 
-  // Never created as base — see readCurrencyInput.
-  const currency = await prisma.currency.create({ data: { ...input.value, isBase: false } });
+  const id = await createCurrency(input.value);
 
-  return NextResponse.json({ currency: serialiseCurrency({ ...currency }) }, { status: 201 });
+  return NextResponse.json({ currency: await currencyById(id) }, { status: 201 });
 }

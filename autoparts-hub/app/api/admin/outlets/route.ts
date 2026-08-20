@@ -1,25 +1,18 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
 import { requireAdmin } from '@/lib/admin-guard';
-import { readOutletInput, serialiseOutlet } from '@/lib/admin-inventory';
+import { readOutletInput } from '@/lib/admin-inventory';
+import {
+  adminOutlets, createOutlet, outletById, outletIdByCode, warehouseExists, warehouseOptions,
+} from '@/lib/sites';
 
 // GET /api/admin/outlets — the counters, plus the warehouses they can be served from.
 export async function GET() {
   const denied = await requireAdmin();
   if (denied) return denied;
 
-  const [outlets, warehouses] = await Promise.all([
-    prisma.retailOutlet.findMany({
-      include: { warehouse: { select: { name: true, code: true } } },
-      orderBy: [{ active: 'desc' }, { code: 'asc' }],
-    }),
-    prisma.warehouse.findMany({ orderBy: [{ priority: 'desc' }, { code: 'asc' }] }),
-  ]);
+  const [outlets, warehouses] = await Promise.all([adminOutlets(), warehouseOptions()]);
 
-  return NextResponse.json({
-    outlets: outlets.map(serialiseOutlet),
-    warehouses: warehouses.map((w) => ({ id: w.id, name: `${w.code} — ${w.name}` })),
-  });
+  return NextResponse.json({ outlets, warehouses });
 }
 
 // POST /api/admin/outlets
@@ -37,11 +30,9 @@ export async function POST(req: Request) {
   const input = readOutletInput(body);
   if (!input.ok) return NextResponse.json({ error: input.error }, { status: 400 });
 
-  const [clash, warehouse] = await Promise.all([
-    prisma.retailOutlet.findUnique({ where: { code: input.value.code } }),
-    input.value.warehouseId
-      ? prisma.warehouse.findUnique({ where: { id: input.value.warehouseId } })
-      : Promise.resolve(null),
+  const [clash, warehouseKnown] = await Promise.all([
+    outletIdByCode(input.value.code),
+    input.value.warehouseId ? warehouseExists(input.value.warehouseId) : Promise.resolve(true),
   ]);
 
   if (clash) {
@@ -50,14 +41,11 @@ export async function POST(req: Request) {
       { status: 409 }
     );
   }
-  if (input.value.warehouseId && !warehouse) {
+  if (!warehouseKnown) {
     return NextResponse.json({ error: 'Unknown warehouse.' }, { status: 400 });
   }
 
-  const outlet = await prisma.retailOutlet.create({
-    data: input.value,
-    include: { warehouse: { select: { name: true, code: true } } },
-  });
+  const id = await createOutlet(input.value);
 
-  return NextResponse.json({ outlet: serialiseOutlet(outlet) }, { status: 201 });
+  return NextResponse.json({ outlet: await outletById(id) }, { status: 201 });
 }

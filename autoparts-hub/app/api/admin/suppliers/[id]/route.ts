@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
 import { requireAdmin } from '@/lib/admin-guard';
+import { readRating, readSupplierInput, readTriStateFlag } from '@/lib/admin-suppliers';
 import {
-  readRating,
-  readSupplierInput,
-  readTriStateFlag,
-  serialiseSupplier,
-} from '@/lib/admin-suppliers';
+  adminSupplierById, deleteSupplier, supplierClash, supplierReferences, updateSupplier,
+  updateSupplierQuick,
+} from '@/lib/suppliers';
 
 /** Fields the list view can set on their own, without a full edit. */
 const QUICK_FIELDS = ['rating', 'acceptsReturns'] as const;
@@ -31,7 +29,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ error: 'Expected a JSON body.' }, { status: 400 });
   }
 
-  const existing = await prisma.supplier.findUnique({ where: { id: params.id } });
+  const existing = await adminSupplierById(params.id);
   if (!existing) return NextResponse.json({ error: 'Supplier not found.' }, { status: 404 });
 
   const keys = Object.keys(body);
@@ -39,37 +37,28 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     keys.length > 0 && keys.every((k) => QUICK_FIELDS.includes(k as (typeof QUICK_FIELDS)[number]));
 
   if (quickOnly) {
-    const data: { rating?: number | null; acceptsReturns?: boolean | null } = {};
+    const fields: { rating?: number | null; acceptsReturns?: boolean | null } = {};
 
     if ('rating' in body) {
       const rating = readRating(body.rating);
       if (!rating.ok) return NextResponse.json({ error: rating.error }, { status: 400 });
-      data.rating = rating.value;
+      fields.rating = rating.value;
     }
 
     if ('acceptsReturns' in body) {
       const returns = readTriStateFlag(body.acceptsReturns, 'Returns');
       if (!returns.ok) return NextResponse.json({ error: returns.error }, { status: 400 });
-      data.acceptsReturns = returns.value;
+      fields.acceptsReturns = returns.value;
     }
 
-    const supplier = await prisma.supplier.update({
-      where: { id: params.id },
-      data,
-      include: { _count: { select: { products: true } }, purchaseCurrency: true },
-    });
-    return NextResponse.json({ supplier: serialiseSupplier(supplier) });
+    await updateSupplierQuick(params.id, fields);
+    return NextResponse.json({ supplier: await adminSupplierById(params.id) });
   }
 
   const input = readSupplierInput(body);
   if (!input.ok) return NextResponse.json({ error: input.error }, { status: 400 });
 
-  const clash = await prisma.supplier.findFirst({
-    where: {
-      id: { not: params.id },
-      OR: [{ code: input.value.code }, { slug: input.value.slug }],
-    },
-  });
+  const clash = await supplierClash(input.value.code, input.value.slug, params.id);
   if (clash) {
     return NextResponse.json(
       {
@@ -82,13 +71,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     );
   }
 
-  const supplier = await prisma.supplier.update({
-    where: { id: params.id },
-    data: input.value,
-    include: { _count: { select: { products: true } }, purchaseCurrency: true },
-  });
+  await updateSupplier(params.id, input.value);
 
-  return NextResponse.json({ supplier: serialiseSupplier(supplier) });
+  return NextResponse.json({ supplier: await adminSupplierById(params.id) });
 }
 
 // DELETE /api/admin/suppliers/<id>
@@ -96,37 +81,35 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
   const denied = await requireAdmin();
   if (denied) return denied;
 
-  const supplier = await prisma.supplier.findUnique({
-    where: { id: params.id },
-    include: { _count: { select: { products: true, markupRules: true } } },
-  });
-
+  const supplier = await adminSupplierById(params.id);
   if (!supplier) return NextResponse.json({ error: 'Supplier not found.' }, { status: 404 });
 
-  // Product.supplierId and MarkupRule.supplierId both point here. Deleting
-  // would either fail at the database or, worse, quietly unsource parts and
-  // change what they cost — so say why instead.
-  if (supplier._count.products > 0) {
+  // Product.supplierId and MarkupRule.supplierId both point here, and both are
+  // ON DELETE SET NULL — so the database would allow this and quietly unsource
+  // the parts and change what they cost. Nothing stops it but this check.
+  const refs = await supplierReferences(params.id);
+
+  if (refs.products > 0) {
     return NextResponse.json(
       {
-        error: `${supplier.name} still sources ${supplier._count.products} part${
-          supplier._count.products === 1 ? '' : 's'
+        error: `${supplier.name} still sources ${refs.products} part${
+          refs.products === 1 ? '' : 's'
         }. Move those to another supplier first.`,
       },
       { status: 409 }
     );
   }
-  if (supplier._count.markupRules > 0) {
+  if (refs.markupRules > 0) {
     return NextResponse.json(
       {
-        error: `${supplier.name} is used by ${supplier._count.markupRules} markup rule${
-          supplier._count.markupRules === 1 ? '' : 's'
+        error: `${supplier.name} is used by ${refs.markupRules} markup rule${
+          refs.markupRules === 1 ? '' : 's'
         }. Delete or retarget those first.`,
       },
       { status: 409 }
     );
   }
 
-  await prisma.supplier.delete({ where: { id: params.id } });
+  await deleteSupplier(params.id);
   return NextResponse.json({ ok: true });
 }

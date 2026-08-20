@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
 import { requireStaff } from '@/lib/admin-guard';
-import { purchasePriceOf } from '@/lib/catalog';
+import { abandonedCarts } from '@/lib/admin-desk';
 
 /**
  * GET /api/admin/carts — baskets that were filled and never ordered.
@@ -19,55 +18,18 @@ export async function GET() {
   if (!gate.ok) return gate.response;
 
   // Scoped in the query, not filtered afterwards — see the client list.
-  const scope = gate.isAdmin
-    ? {}
-    : { client: { salesManagerId: gate.session.userId } };
-
-  const carts = await prisma.cart.findMany({
-    where: { ...scope, items: { some: {} } },
-    include: {
-      client: { select: { id: true, name: true, email: true } },
-      items: {
-        include: {
-          product: {
-            select: {
-              partNumber: true,
-              name: true,
-              basePrice: true,
-              // Same fallback as everywhere else: the active list where it
-              // covers the part, the part's own price where it does not.
-              priceListItems: {
-                where: { priceList: { active: true } },
-                select: { price: true },
-                take: 1,
-              },
-            },
-          },
-        },
-        orderBy: { addedAt: 'asc' },
-      },
-    },
-    // Oldest first: a basket sitting untouched for a fortnight is the one
-    // worth a phone call, and it is the one a newest-first list buries.
-    orderBy: { updatedAt: 'asc' },
-    take: 200,
-  });
+  const carts = await abandonedCarts(gate.isAdmin ? null : gate.session.userId);
 
   return NextResponse.json({
     carts: carts.map((cart) => ({
       id: cart.id,
-      clientId: cart.client.id,
-      clientName: cart.client.name,
-      clientEmail: cart.client.email,
+      clientId: cart.clientId,
+      clientName: cart.clientName,
+      clientEmail: cart.clientEmail,
       updatedAt: cart.updatedAt.toISOString(),
-      units: cart.items.reduce((sum, i) => sum + i.quantity, 0),
-      cost: cart.items.reduce((sum, i) => sum + i.quantity * purchasePriceOf(i.product), 0),
-      items: cart.items.map((i) => ({
-        productId: i.productId,
-        partNumber: i.product.partNumber,
-        name: i.product.name,
-        quantity: i.quantity,
-      })),
+      units: cart.units,
+      cost: cart.cost,
+      items: cart.items,
     })),
   });
 }

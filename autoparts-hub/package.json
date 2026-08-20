@@ -10,16 +10,18 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:migrate": "prisma migrate dev",
-    "db:deploy": "prisma migrate deploy",
+    "db:deploy": "tsx prisma/migrate.ts",
     "db:seed": "tsx prisma/seed.ts",
     "db:catalog": "tsx prisma/seed-catalog.ts",
     "db:vehicles": "tsx prisma/seed-vehicles.ts",
     "db:suppliers": "tsx prisma/seed-suppliers.ts",
     "db:stock": "tsx prisma/seed-stock.ts",
     "db:import:tecdoc": "tsx prisma/import-tecdoc.ts",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "db:reconcile": "tsx --conditions=react-server prisma/reconcile-stock.ts"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.1.0",
     "@prisma/client": "^5.20.0",
     "bcryptjs": "^2.4.3",
     "next": "14.2.5",

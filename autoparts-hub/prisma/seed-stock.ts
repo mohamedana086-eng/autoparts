@@ -91,6 +91,30 @@ async function main() {
     console.log(`--reset: cleared ${count} stock row${count === 1 ? '' : 's'}`);
   }
 
+  /**
+   * What live orders already hold, per (part, warehouse).
+   *
+   * Seeding used to write `reserved: 0` on every shelf it created, which threw
+   * away reservations belonging to orders that were still open. The shelves
+   * then disagreed with the orders, and shipping one drove `reserved` below
+   * zero and was refused by the CHECK constraint — an order nobody could ever
+   * ship, out of a command that looked like it only touched sample data.
+   *
+   * So the counts are laid on top of what is owed rather than over it.
+   */
+  const owed = new Map<string, number>();
+  const allocations = await prisma.orderItemAllocation.findMany({
+    where: { orderItem: { order: { status: { notIn: ['shipped', 'paid'] } } } },
+    select: { warehouseId: true, quantity: true, orderItem: { select: { productId: true } } },
+  });
+  for (const a of allocations) {
+    const key = `${a.orderItem.productId}:${a.warehouseId}`;
+    owed.set(key, (owed.get(key) ?? 0) + a.quantity);
+  }
+  if (owed.size > 0) {
+    console.log(`${owed.size} shelf/shelves hold stock for open orders; those reservations are kept`);
+  }
+
   const products = await prisma.product.findMany({
     select: { id: true, partNumber: true, _count: { select: { stock: true } } },
     orderBy: { partNumber: 'asc' },
@@ -111,18 +135,21 @@ async function main() {
     const plan = planFor(product.partNumber);
     const total = plan.EU1 + plan.EG1;
 
-    for (const [code, quantity] of Object.entries(plan)) {
+    for (const [code, planned] of Object.entries(plan)) {
+      const warehouseId = warehouses.get(code)!;
+      const reserved = owed.get(`${product.id}:${warehouseId}`) ?? 0;
+
       // A row of zero is a counted empty shelf, which is the point of the
-      // out-of-stock bucket — but only write one where the plan put the part.
-      if (quantity === 0 && code === 'EG1') continue;
+      // out-of-stock bucket — but only write one where the plan put the part,
+      // or where an open order is holding units there regardless.
+      if (planned === 0 && code === 'EG1' && reserved === 0) continue;
+
+      // The shelf has to hold at least what is already promised, or the CHECK
+      // constraint refuses the row outright.
+      const quantity = Math.max(planned, reserved);
 
       await prisma.stockLevel.create({
-        data: {
-          productId: product.id,
-          warehouseId: warehouses.get(code)!,
-          quantity,
-          reserved: 0,
-        },
+        data: { productId: product.id, warehouseId, quantity, reserved },
       });
     }
 

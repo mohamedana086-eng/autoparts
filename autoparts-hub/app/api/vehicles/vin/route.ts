@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { makesByWmi, vehicleTree } from '@/lib/vehicles';
 import { parseVin } from '@/lib/vin';
 
 // GET /api/vehicles/vin?vin=WBA3A5C50DF123456
@@ -18,9 +18,7 @@ export async function GET(req: NextRequest) {
 
   const reading = parsed.value;
 
-  const make = await prisma.vehicleMake.findFirst({
-    where: { wmiCodes: { has: reading.wmi } },
-  });
+  const make = (await makesByWmi(reading.wmi))[0] ?? null;
 
   if (!make) {
     return NextResponse.json({
@@ -35,11 +33,9 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const models = await prisma.vehicleModel.findMany({
-    where: { makeId: make.id },
-    include: { variants: { orderBy: { name: 'asc' } } },
-    orderBy: { name: 'asc' },
-  });
+  // The tree is small enough to read whole and narrow here — see /api/vehicles,
+  // which sends the same thing to the picker on every page load.
+  const models = (await vehicleTree()).find((m) => m.id === make.id)?.models ?? [];
 
   const year = reading.modelYear;
 

@@ -1,54 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
 import { requireAdmin } from '@/lib/admin-guard';
+import {
+  deletePriceList, priceListById, priceListItems, updatePriceList, type PriceListRow,
+} from '@/lib/pricing-admin';
 
 /** How many lines to send back with one list. Enough to check a file landed
  *  the way it was meant to; not the whole thing, which can be tens of
  *  thousands of rows. */
 const ITEM_PAGE = 200;
 
+function serialise(l: PriceListRow) {
+  return {
+    id: l.id,
+    name: l.name,
+    description: l.description,
+    active: l.active,
+    sourceName: l.sourceName,
+    itemCount: l.itemCount,
+    createdAt: l.createdAt.toISOString(),
+    updatedAt: l.updatedAt.toISOString(),
+  };
+}
+
 // GET /api/admin/price-lists/<id> — the list, with a sample of what is in it.
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const denied = await requireAdmin();
   if (denied) return denied;
 
-  const list = await prisma.priceList.findUnique({
-    where: { id: params.id },
-    include: {
-      _count: { select: { items: true } },
-      items: {
-        take: ITEM_PAGE,
-        include: { product: { select: { partNumber: true, name: true, basePrice: true } } },
-        orderBy: { product: { partNumber: 'asc' } },
-      },
-    },
-  });
-
+  const list = await priceListById(params.id);
   if (!list) return NextResponse.json({ error: 'Price list not found.' }, { status: 404 });
 
-  return NextResponse.json({
-    list: {
-      id: list.id,
-      name: list.name,
-      description: list.description,
-      active: list.active,
-      sourceName: list.sourceName,
-      itemCount: list._count.items,
-      createdAt: list.createdAt.toISOString(),
-      updatedAt: list.updatedAt.toISOString(),
-    },
-    shown: list.items.length,
-    items: list.items.map((i) => ({
-      productId: i.productId,
-      partNumber: i.product.partNumber,
-      name: i.product.name,
-      price: i.price,
-      sourcePrice: i.sourcePrice,
-      sourceCurrency: i.sourceCurrency,
-      /** What the part costs without this list, so the change is visible. */
-      basePrice: i.product.basePrice,
-    })),
-  });
+  const items = await priceListItems(params.id, ITEM_PAGE);
+
+  return NextResponse.json({ list: serialise(list), shown: items.length, items });
 }
 
 /**
@@ -72,10 +56,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ error: 'Expected a JSON body.' }, { status: 400 });
   }
 
-  const existing = await prisma.priceList.findUnique({ where: { id: params.id } });
+  const existing = await priceListById(params.id);
   if (!existing) return NextResponse.json({ error: 'Price list not found.' }, { status: 404 });
 
-  const data: { name?: string; description?: string | null } = {};
+  const fields: { name?: string; description?: string | null; active?: boolean } = {};
 
   if (body.name !== undefined) {
     const name = String(body.name ?? '').trim();
@@ -83,45 +67,19 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (name.length > 120) {
       return NextResponse.json({ error: 'Keep the name under 120 characters.' }, { status: 400 });
     }
-    data.name = name;
+    fields.name = name;
   }
 
   if (body.description !== undefined) {
     const description = String(body.description ?? '').trim();
-    data.description = description || null;
+    fields.description = description || null;
   }
 
-  const wantsActive = body.active === undefined ? null : body.active === true;
+  if (body.active !== undefined) fields.active = body.active === true;
 
-  const list = await prisma.$transaction(async (tx) => {
-    if (wantsActive === true) {
-      // Stand the current one down first, in the same transaction, so the two
-      // lists are never both active — not even for the width of a statement.
-      await tx.priceList.updateMany({
-        where: { active: true, NOT: { id: params.id } },
-        data: { active: false },
-      });
-    }
+  await updatePriceList(params.id, fields);
 
-    return tx.priceList.update({
-      where: { id: params.id },
-      data: { ...data, ...(wantsActive === null ? {} : { active: wantsActive }) },
-      include: { _count: { select: { items: true } } },
-    });
-  });
-
-  return NextResponse.json({
-    list: {
-      id: list.id,
-      name: list.name,
-      description: list.description,
-      active: list.active,
-      sourceName: list.sourceName,
-      itemCount: list._count.items,
-      createdAt: list.createdAt.toISOString(),
-      updatedAt: list.updatedAt.toISOString(),
-    },
-  });
+  return NextResponse.json({ list: serialise((await priceListById(params.id))!) });
 }
 
 /**
@@ -136,7 +94,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   const denied = await requireAdmin();
   if (denied) return denied;
 
-  const existing = await prisma.priceList.findUnique({ where: { id: params.id } });
+  const existing = await priceListById(params.id);
   if (!existing) return NextResponse.json({ error: 'Price list not found.' }, { status: 404 });
 
   if (existing.active) {
@@ -149,8 +107,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     );
   }
 
-  // Its lines go with it: the cascade is on the foreign key.
-  await prisma.priceList.delete({ where: { id: params.id } });
+  await deletePriceList(params.id);
 
   return NextResponse.json({ ok: true });
 }

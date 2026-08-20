@@ -160,27 +160,3 @@ export function readSupplierInput(
   };
 }
 
-export function serialiseSupplier(s: {
-  id: string; code: string; slug: string; name: string; description: string | null;
-  reliability: string; rating: number | null; acceptsReturns: boolean | null;
-  country?: string | null; guaranteeMonths?: number | null; defaultStockDays?: number | null;
-  purchaseCurrencyId?: string | null; purchaseCurrency?: { code: string } | null;
-  _count?: { products: number };
-}) {
-  return {
-    id: s.id,
-    code: s.code,
-    slug: s.slug,
-    name: s.name,
-    description: s.description,
-    reliability: s.reliability,
-    rating: s.rating,
-    acceptsReturns: s.acceptsReturns,
-    country: s.country ?? null,
-    guaranteeMonths: s.guaranteeMonths ?? null,
-    defaultStockDays: s.defaultStockDays ?? null,
-    purchaseCurrencyId: s.purchaseCurrencyId ?? null,
-    purchaseCurrencyCode: s.purchaseCurrency?.code ?? null,
-    productCount: s._count?.products ?? 0,
-  };
-}

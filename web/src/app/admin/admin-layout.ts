@@ -10,9 +10,16 @@ import { AuthService } from '../core/auth.service';
          width, so a wide table stretched this column past the page and the
          whole admin scrolled sideways while the table's own overflow-x
          wrapper sat unused. Allowing the column to shrink puts the scrolling
-         back where it belongs — inside the table. -->
-    <div class="max-w-7xl mx-auto px-6 py-8 grid md:grid-cols-[220px_minmax(0,1fr)] gap-8">
-      <aside>
+         back where it belongs — inside the table.
+
+         It has to be said at every width, not just from md up. Below md the
+         grid is a single column that nothing constrains, so the floor came
+         back and twelve of the thirteen admin pages scrolled sideways on a
+         phone — the products table alone is 920px wide. The min-w-0 on the
+         section says the same thing a second way: a grid item defaults to
+         min-width auto, which is the floor this is trying to remove. -->
+    <div class="max-w-7xl mx-auto px-6 py-8 grid grid-cols-[minmax(0,1fr)] md:grid-cols-[220px_minmax(0,1fr)] gap-8">
+      <aside class="min-w-0">
         <p class="font-display font-bold text-sm mb-4 text-mute uppercase tracking-widest">Admin panel</p>
         <nav class="grid gap-4">
           @for (section of visibleNav(); track section.heading) {
@@ -36,7 +43,7 @@ import { AuthService } from '../core/auth.service';
           <a routerLink="/admin/orders" class="hover:text-paper transition-colors">Orders</a>
         </div>
       </aside>
-      <section><router-outlet /></section>
+      <section class="min-w-0"><router-outlet /></section>
     </div>
   `,
 })

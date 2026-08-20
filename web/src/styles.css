@@ -32,12 +32,19 @@
     @apply border border-ink-line rounded-plate bg-ink-panel;
   }
 
-  /* Form controls. */
+  /* Form controls.
+     min-w-0 because a control's default min-width is auto, which floors it at
+     its own content: a select is as wide as its longest option, and one
+     account named "Elfarouk Omar Farouk" made the admin's notification form
+     453px wide inside a 375px phone. The floor is invisible until the content
+     is real, so it is removed here once rather than found page by page.
+     w-full so a field then fills the column it was given instead of
+     collapsing to nothing now that it is allowed to shrink. */
   .field {
-    @apply bg-ink border border-ink-line rounded-plate px-3 py-2 text-sm text-paper;
+    @apply w-full min-w-0 bg-ink border border-ink-line rounded-plate px-3 py-2 text-sm text-paper;
   }
   .field-sm {
-    @apply bg-ink-panel border border-ink-line rounded-plate px-2 py-1 text-xs text-paper;
+    @apply min-w-0 bg-ink-panel border border-ink-line rounded-plate px-2 py-1 text-xs text-paper;
   }
 
   .btn-primary {

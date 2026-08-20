@@ -106,7 +106,30 @@ ceiling and the refusal are both reachable without emptying a shelf by hand.
 
 It is idempotent and safe on the deployed database: a part that already has any
 stock row is left alone, so a count entered in the admin survives a re-run.
-`npm run db:stock -- --reset` is the only way it overwrites.
+`npm run db:stock -- --reset` is the only way it overwrites, and even then it
+keeps the reservations open orders are holding rather than writing over them.
+
+### When the shelves and the orders disagree
+
+```bash
+npm run db:reconcile          # report
+npm run db:reconcile -- --fix # repair
+```
+
+`StockLevel.reserved` is a stored copy of something derivable — the units live
+orders hold against that shelf, which is the sum of their `OrderItemAllocation`
+rows. Storing it makes availability one cheap read instead of a join per part,
+and makes it possible for the two to drift: the admin stock editor takes
+`reserved` as a free number, deleting a shelf there leaves an order's
+allocation behind, and re-seeding rewrites the shelves.
+
+Drift is not cosmetic. Releasing more than a shelf says is reserved drives the
+column below zero, the CHECK constraint refuses the whole transaction, and the
+order can never be marked shipped. The status endpoint answers that with a 409
+naming the problem rather than a stack trace, and this command is what fixes
+it. Where a shelf holds fewer units than its orders were promised, repair
+raises the count to cover them and prints every raise — those units are already
+owed to a customer, and the alternative is an order nobody can ship.
 
 That serves the API on http://localhost:3000. There is nothing to look at
 there — `/` is a 404 by design. Start the Angular app as well and use it

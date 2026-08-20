@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Prisma } from '@prisma/client';
-import { prisma } from '@/lib/db';
 import {
-  loadPricingContext, normalisePartNumber, priceFor, purchasePriceOf, roundMoney,
-  sellableQuantity, PRICED_PRODUCT_INCLUDE, STOCK_INCLUDE,
+  loadPricingContext, normalisePartNumber, priceForRow, rowPurchasePrice, roundMoney, sellableQuantity,
 } from '@/lib/catalog';
+import { matchByInterchange, matchByNormalisedPartNumber, productsForBulk } from '@/lib/products';
 
 /** Guards the request against someone pasting a whole catalogue in. */
 const MAX_ROWS = 1000;
@@ -46,30 +44,13 @@ export async function POST(req: NextRequest) {
   }
 
   const [direct, viaInterchange, ctx] = await Promise.all([
-    prisma.$queryRaw<Array<{ id: string; norm: string }>>`
-      SELECT "id", regexp_replace(upper("partNumber"), '[^A-Z0-9]', '', 'g') AS norm
-      FROM "Product"
-      WHERE regexp_replace(upper("partNumber"), '[^A-Z0-9]', '', 'g')
-            IN (${Prisma.join(needles)})
-    `,
-    prisma.$queryRaw<Array<{ id: string; norm: string; target: string }>>`
-      SELECT i."sourceId" AS "id",
-             regexp_replace(upper(i."targetPartNo"), '[^A-Z0-9]', '', 'g') AS norm,
-             i."targetPartNo" AS target
-      FROM "Interchange" i
-      WHERE regexp_replace(upper(i."targetPartNo"), '[^A-Z0-9]', '', 'g')
-            IN (${Prisma.join(needles)})
-    `,
+    matchByNormalisedPartNumber(needles),
+    matchByInterchange(needles),
     loadPricingContext(),
   ]);
 
   const ids = [...new Set([...direct.map((r) => r.id), ...viaInterchange.map((r) => r.id)])];
-  const products = ids.length
-    ? await prisma.product.findMany({
-        where: { id: { in: ids } },
-        include: { ...PRICED_PRODUCT_INCLUDE, ...STOCK_INCLUDE },
-      })
-    : [];
+  const products = await productsForBulk(ids);
   const byId = new Map(products.map((p) => [p.id, p]));
 
   // A direct hit beats a cross-reference for the same input.
@@ -91,7 +72,7 @@ export async function POST(req: NextRequest) {
       return { input, found: false as const, product: null };
     }
 
-    const pricing = priceFor(product, ctx);
+    const pricing = priceForRow(product, ctx);
 
     return {
       input,
@@ -102,14 +83,15 @@ export async function POST(req: NextRequest) {
         id: product.id,
         partNumber: product.partNumber,
         name: product.name,
-        manufacturer: product.manufacturer.name,
-        system: product.vehicleSystem.name,
+        manufacturer: product.manufacturerName,
+        system: product.systemName,
         stockDays: product.stockDays,
-        price: pricing?.finalPrice ?? purchasePriceOf(product),
+        price: pricing?.finalPrice ?? rowPurchasePrice(product),
         appliedRule: pricing?.appliedRule ?? null,
         // A spreadsheet of fifty numbers is exactly where adding more than
         // exists would go unnoticed, so the figure travels with the row.
-        available: sellableQuantity(product),
+        // Null means nobody counted the part, which sells nothing.
+        available: sellableQuantity(product.available),
       },
     };
   });

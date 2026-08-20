@@ -1,31 +1,18 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
-import {
-  availabilityOf, loadPricingContext, priceFor, PRICED_PRODUCT_INCLUDE, STOCK_INCLUDE,
-} from '@/lib/catalog';
+import { loadPricingContext, priceForRow, rowPurchasePrice } from '@/lib/catalog';
+import { productDetail } from '@/lib/products';
 
 // GET /api/catalog/products/<id> — detail view, priced for the caller's tier.
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
-  const product = await prisma.product.findUnique({
-    where: { id: params.id },
-    include: {
-      ...PRICED_PRODUCT_INCLUDE,
-      interchanges: true,
-      supplier: true,
-      // All of them here, unlike search, which needs only the one that leads.
-      // A part carries at most twelve and this is the page with room to show
-      // them; sortOrder is the order they were arranged in.
-      images: { orderBy: { sortOrder: 'asc' }, select: { url: true, alt: true } },
-      ...STOCK_INCLUDE,
-    },
-  });
+  const found = await productDetail(params.id);
 
-  if (!product) {
+  if (!found) {
     return NextResponse.json({ error: 'Product not found' }, { status: 404 });
   }
 
+  const { product, images, interchanges } = found;
   const ctx = await loadPricingContext();
-  const pricing = priceFor(product, ctx);
+  const pricing = priceForRow(product, ctx);
 
   return NextResponse.json({
     tierName: ctx.tierName,
@@ -35,24 +22,24 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       partNumber: product.partNumber,
       name: product.name,
       description: product.description,
-      manufacturer: product.manufacturer.name,
-      system: product.vehicleSystem.name,
-      systemSlug: product.vehicleSystem.slug,
+      manufacturer: product.manufacturerName,
+      system: product.systemName,
+      systemSlug: product.systemSlug,
       stockDays: product.stockDays,
-      price: pricing?.finalPrice ?? product.basePrice,
+      price: pricing?.finalPrice ?? rowPurchasePrice(product),
       appliedRule: pricing?.appliedRule ?? null,
       // Empty where nobody has added any, which today is every part. The alt
       // falls back to the part's name where it is rendered, per the schema.
-      images: product.images.map((i) => ({ url: i.url, alt: i.alt })),
-      available: availabilityOf(product),
-      supplier: product.supplier
+      images,
+      available: product.available,
+      supplier: product.supplierSlug
         ? {
-            slug: product.supplier.slug,
-            name: product.supplier.name,
-            rating: product.supplier.rating,
+            slug: product.supplierSlug,
+            name: product.supplierName!,
+            rating: product.supplierRating,
           }
         : null,
-      interchanges: product.interchanges.map((i) => ({
+      interchanges: interchanges.map((i) => ({
         id: i.id,
         partNumber: i.targetPartNo,
         manufacturer: i.targetManufacturer,

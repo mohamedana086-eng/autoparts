@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
 import { requireAdmin } from '@/lib/admin-guard';
+import {
+  adminClientById, categoryExists, clientRoleAndName, currencyForClient, updateClient,
+} from '@/lib/admin-desk';
 
 const ROLES = ['ADMIN', 'SALES', 'B2B', 'RETAIL'];
 
@@ -23,12 +25,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 
   const categoryId = body.categoryId ? String(body.categoryId) : null;
-  if (categoryId) {
-    const exists = await prisma.clientCategory.findUnique({ where: { id: categoryId } });
-    if (!exists) return NextResponse.json({ error: 'Unknown pricing tier.' }, { status: 400 });
+  if (categoryId && !(await categoryExists(categoryId))) {
+    return NextResponse.json({ error: 'Unknown pricing tier.' }, { status: 400 });
   }
 
-  const existing = await prisma.client.findUnique({ where: { id: params.id } });
+  const existing = await adminClientById(params.id);
   if (!existing) return NextResponse.json({ error: 'Client not found.' }, { status: 404 });
 
   // Percent off the marked-up price — see the order of operations in
@@ -45,7 +46,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const currencyId = body.currencyId ? String(body.currencyId) : null;
   if (currencyId) {
-    const currency = await prisma.currency.findUnique({ where: { id: currencyId } });
+    const currency = await currencyForClient(currencyId);
     if (!currency) return NextResponse.json({ error: 'Unknown currency.' }, { status: 400 });
     if (!currency.active) {
       return NextResponse.json(
@@ -66,7 +67,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         { status: 400 }
       );
     }
-    const manager = await prisma.client.findUnique({ where: { id: salesManagerId } });
+    const manager = await clientRoleAndName(salesManagerId);
     if (!manager) return NextResponse.json({ error: 'Unknown sales manager.' }, { status: 400 });
     if (manager.role !== 'SALES') {
       return NextResponse.json(
@@ -76,27 +77,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     }
   }
 
-  const client = await prisma.client.update({
-    where: { id: params.id },
-    data: { role, categoryId, discountPercent, currencyId, salesManagerId },
-    include: { category: true, currency: true, salesManager: true },
-  });
+  await updateClient(params.id, { role, categoryId, discountPercent, currencyId, salesManagerId });
 
-  return NextResponse.json({
-    client: {
-      id: client.id,
-      name: client.name,
-      email: client.email,
-      role: client.role,
-      city: client.city,
-      hasLogin: !!client.passwordHash,
-      categoryId: client.categoryId,
-      categoryName: client.category?.name ?? null,
-      discountPercent: client.discountPercent,
-      currencyId: client.currencyId,
-      currencyCode: client.currency?.code ?? null,
-      salesManagerId: client.salesManagerId,
-      salesManagerName: client.salesManager?.name ?? null,
-    },
-  });
+  return NextResponse.json({ client: await adminClientById(params.id) });
 }

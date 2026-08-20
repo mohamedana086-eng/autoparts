@@ -1,27 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
 import { requireAdmin } from '@/lib/admin-guard';
+import { adminCategories, createCategory } from '@/lib/pricing-admin';
 
 // GET /api/admin/client-categories
 export async function GET() {
   const denied = await requireAdmin();
   if (denied) return denied;
 
-  const categories = await prisma.clientCategory.findMany({
-    include: { _count: { select: { clients: true } } },
-    orderBy: { markupPercent: 'asc' },
-  });
-
-  return NextResponse.json({
-    categories: categories.map((c) => ({
-      id: c.id,
-      name: c.name,
-      markupPercent: c.markupPercent,
-      minOrderAmount: c.minOrderAmount,
-      shelfLifeDays: c.shelfLifeDays,
-      clientCount: c._count.clients,
-    })),
-  });
+  return NextResponse.json({ categories: await adminCategories() });
 }
 
 // POST /api/admin/client-categories { name, markupPercent, minOrderAmount, shelfLifeDays }
@@ -47,9 +33,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Markup, minimum order and shelf life must be numbers.' }, { status: 400 });
   }
 
-  const category = await prisma.clientCategory.create({
-    data: { name, markupPercent, minOrderAmount, shelfLifeDays },
-  });
+  const category = await createCategory({ name, markupPercent, minOrderAmount, shelfLifeDays });
 
-  return NextResponse.json({ category: { ...category, clientCount: 0 } }, { status: 201 });
+  return NextResponse.json({ category }, { status: 201 });
 }

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
 import { requireAdmin } from '@/lib/admin-guard';
-import { readOutletInput, serialiseOutlet } from '@/lib/admin-inventory';
+import { readOutletInput } from '@/lib/admin-inventory';
+import {
+  deleteOutlet, outletById, outletIdByCode, updateOutlet, warehouseExists,
+} from '@/lib/sites';
 
 // PATCH /api/admin/outlets/<id>
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
@@ -15,36 +17,30 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ error: 'Expected a JSON body.' }, { status: 400 });
   }
 
-  const existing = await prisma.retailOutlet.findUnique({ where: { id: params.id } });
+  const existing = await outletById(params.id);
   if (!existing) return NextResponse.json({ error: 'Outlet not found.' }, { status: 404 });
 
   const input = readOutletInput(body);
   if (!input.ok) return NextResponse.json({ error: input.error }, { status: 400 });
 
-  const [clash, warehouse] = await Promise.all([
-    prisma.retailOutlet.findFirst({ where: { id: { not: params.id }, code: input.value.code } }),
-    input.value.warehouseId
-      ? prisma.warehouse.findUnique({ where: { id: input.value.warehouseId } })
-      : Promise.resolve(null),
+  const [clash, warehouseKnown] = await Promise.all([
+    outletIdByCode(input.value.code),
+    input.value.warehouseId ? warehouseExists(input.value.warehouseId) : Promise.resolve(true),
   ]);
 
-  if (clash) {
+  if (clash && clash !== params.id) {
     return NextResponse.json(
       { error: `${input.value.code} is already an outlet code.` },
       { status: 409 }
     );
   }
-  if (input.value.warehouseId && !warehouse) {
+  if (!warehouseKnown) {
     return NextResponse.json({ error: 'Unknown warehouse.' }, { status: 400 });
   }
 
-  const outlet = await prisma.retailOutlet.update({
-    where: { id: params.id },
-    data: input.value,
-    include: { warehouse: { select: { name: true, code: true } } },
-  });
+  await updateOutlet(params.id, input.value);
 
-  return NextResponse.json({ outlet: serialiseOutlet(outlet) });
+  return NextResponse.json({ outlet: await outletById(params.id) });
 }
 
 // DELETE /api/admin/outlets/<id>
@@ -52,13 +48,13 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
   const denied = await requireAdmin();
   if (denied) return denied;
 
-  const outlet = await prisma.retailOutlet.findUnique({ where: { id: params.id } });
+  const outlet = await outletById(params.id);
   if (!outlet) return NextResponse.json({ error: 'Outlet not found.' }, { status: 404 });
 
   // Nothing references an outlet yet, so there is nothing to refuse for. When
   // orders learn to be collected from one, this needs the same guard the
   // product delete has.
-  await prisma.retailOutlet.delete({ where: { id: params.id } });
+  await deleteOutlet(params.id);
 
   return NextResponse.json({ ok: true });
 }

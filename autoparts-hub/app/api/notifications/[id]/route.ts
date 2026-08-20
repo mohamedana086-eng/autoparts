@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { markRead } from '@/lib/notifications';
 
 /**
  * PATCH /api/notifications/<id> — marks one read.
@@ -14,25 +14,14 @@ export async function PATCH(_req: NextRequest, { params }: { params: { id: strin
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 });
 
-  const result = await prisma.notification.updateMany({
-    where: { id: params.id, clientId: session.userId, readAt: null },
-    data: { readAt: new Date() },
-  });
+  const { found, changed } = await markRead(session.userId, params.id);
 
-  // Nothing matched: either it is not theirs, it does not exist, or it was
-  // already read. Reporting the same 404 for all three keeps the endpoint from
-  // confirming that someone else's notification id is real.
-  if (result.count === 0) {
-    const stillTheirs = await prisma.notification.findFirst({
-      where: { id: params.id, clientId: session.userId },
-      select: { id: true, readAt: true },
-    });
-    if (!stillTheirs) {
-      return NextResponse.json({ error: 'Notification not found.' }, { status: 404 });
-    }
-    // Already read — the caller's goal is met, so this is not a failure.
-    return NextResponse.json({ ok: true, readAt: stillTheirs.readAt?.toISOString() ?? null });
+  // Not theirs or not real: the same 404 for both, so the endpoint cannot be
+  // used to confirm that someone else's notification id exists.
+  if (!found) {
+    return NextResponse.json({ error: 'Notification not found.' }, { status: 404 });
   }
 
-  return NextResponse.json({ ok: true });
+  // Already read — the caller's goal is met, so this is not a failure.
+  return NextResponse.json({ ok: true, alreadyRead: !changed });
 }
